@@ -31,6 +31,10 @@ export default function TeamGamesPage() {
     setGames(getGamesForTeam(decodedKey))
   }, [decodedKey])
 
+  useEffect(() => {
+    setGames(getGamesForTeam(decodedKey))
+  }, [decodedKey])
+
   if (!team) {
     return (
       <div className="text-center py-8">
@@ -68,10 +72,6 @@ export default function TeamGamesPage() {
   const handleCancelDeleteGame = () => {
     setGameToDelete(null)
   }
-
-  useEffect(() => {
-    setGames(getGamesForTeam(decodedKey))
-  }, [decodedKey])
 
   return (
     <div className="space-y-6">

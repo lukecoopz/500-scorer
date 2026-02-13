@@ -1,7 +1,3 @@
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
-import NavigationTracker from '@/lib/NavigationTracker'
 import { GameProvider } from '@/lib/game-context'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import PageNotFound from './lib/PageNotFound'
@@ -16,10 +12,8 @@ import RecordTricksPage from './pages/RecordTricksPage'
 function App() {
   return (
     <GameProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <NavigationTracker />
-          <Routes>
+      <Router>
+        <Routes>
             <Route path="/" element={<Layout><StartPage /></Layout>} />
             <Route path="/teams" element={<Layout><ExistingTeamsPage /></Layout>} />
             <Route path="/teams/:teamKey/games" element={<Layout><TeamGamesPage /></Layout>} />
@@ -29,8 +23,6 @@ function App() {
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>
-        <Toaster />
-      </QueryClientProvider>
     </GameProvider>
   )
 }

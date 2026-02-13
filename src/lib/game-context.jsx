@@ -113,14 +113,6 @@ export function GameProvider({ children }) {
     })
   }, [currentGame, updateGame])
 
-  const clearCurrentRound = useCallback(() => {
-    updateGame({ currentRound: null })
-  }, [updateGame])
-
-  const resetToWhoCalling = useCallback(() => {
-    updateGame({ currentRound: null })
-  }, [updateGame])
-
   const deleteRound = useCallback((roundIndex) => {
     if (!currentGame?.rounds?.[roundIndex]) return
     const round = currentGame.rounds[roundIndex]
@@ -146,8 +138,6 @@ export function GameProvider({ children }) {
         updateGame,
         setBid,
         confirmRound,
-        clearCurrentRound,
-        resetToWhoCalling,
         deleteRound,
       }}
     >
