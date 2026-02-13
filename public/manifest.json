@@ -1,0 +1,10 @@
+{
+  "name": "500 Score Keeper",
+  "short_name": "500 Scorer",
+  "description": "Score keeper for the 500 card game",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": []
+}
