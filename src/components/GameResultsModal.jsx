@@ -47,18 +47,41 @@ export default function GameResultsModal({ game, onClose }) {
               ROUNDS ({game.rounds?.length || 0})
             </h4>
             <ul className="space-y-2">
-              {game.rounds?.map((r, i) => (
-                <li
-                  key={i}
-                  className="flex justify-between items-center p-2 rounded-lg glass text-sm"
-                >
-                  <span>R{i + 1} {r.caller} · {r.tricks} {r.suit}</span>
-                  <span className="flex gap-2">
-                    <span className="text-app-label">+{r.pts1}</span>
-                    <span className="text-white/70">+{r.pts2}</span>
-                  </span>
-                </li>
-              ))}
+              {game.rounds?.reduce(
+                (acc, r, i) => {
+                  const prev1 = acc.running1
+                  const prev2 = acc.running2
+                  const run1 = prev1 + (r.pts1 ?? 0)
+                  const run2 = prev2 + (r.pts2 ?? 0)
+                  acc.items.push(
+                    <li
+                      key={i}
+                      className="flex justify-between items-center p-3 rounded-lg glass gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-white block">
+                          R{i + 1} {r.caller} · {r.tricks} {r.suit}
+                        </span>
+                        <span className="text-xs text-white/60 mt-0.5">
+                          {game.team1}: {run1} · {game.team2}: {run2}
+                        </span>
+                      </div>
+                      <span className="flex gap-2 text-sm shrink-0">
+                        <span className={(r.pts1 ?? 0) >= 0 ? 'text-app-label' : 'text-red-400'}>
+                          {(r.pts1 ?? 0) >= 0 ? '+' : ''}{r.pts1}
+                        </span>
+                        <span className={(r.pts2 ?? 0) >= 0 ? 'text-white/70' : 'text-red-400'}>
+                          {(r.pts2 ?? 0) >= 0 ? '+' : ''}{r.pts2}
+                        </span>
+                      </span>
+                    </li>
+                  )
+                  acc.running1 = run1
+                  acc.running2 = run2
+                  return acc
+                },
+                { items: [], running1: 0, running2: 0 }
+              ).items}
             </ul>
           </div>
 
