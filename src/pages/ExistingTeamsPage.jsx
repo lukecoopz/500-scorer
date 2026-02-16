@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, ChevronRight, Trash2 } from 'lucide-react'
-import { getTeams, deleteTeam } from '@/lib/game-storage'
+import { getTeams, getGamesForTeam, deleteTeam } from '@/lib/game-storage'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -52,7 +52,11 @@ export default function ExistingTeamsPage() {
         </p>
       ) : (
         <ul className="space-y-2">
-          {teams.map((team) => (
+          {teams.map((team) => {
+            const games = getGamesForTeam(team.key)
+            const wins1 = games.filter((g) => g.winner === 1).length
+            const wins2 = games.filter((g) => g.winner === 2).length
+            return (
             <li key={team.key} className="relative group">
               <button
                 onClick={() => handleSelectTeam(team)}
@@ -63,8 +67,12 @@ export default function ExistingTeamsPage() {
                     <Users className="w-5 h-5 text-white/70" />
                   </div>
                   <div>
-                    <p className="font-medium">{team.team1}</p>
-                    <p className="text-sm text-white/70">vs {team.team2}</p>
+                    <p className="text-lg font-bold">{team.team1} vs {team.team2}</p>
+                    <p className="text-sm text-white/70 mt-0.5">
+                      {team.team1}: <span className="text-app-gold font-medium">{wins1}</span> wins
+                      {' · '}
+                      {team.team2}: <span className="text-app-gold font-medium">{wins2}</span> wins
+                    </p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-white/70 shrink-0" />
@@ -78,7 +86,8 @@ export default function ExistingTeamsPage() {
                 <Trash2 className="w-5 h-5" />
               </button>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 

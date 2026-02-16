@@ -1,6 +1,7 @@
 import { Trophy, X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
+import { RoundBidDisplay } from '@/lib/suit-icons'
 
 export default function GameResultsModal({ game, onClose }) {
   const winner = game.winner === 1 ? game.team1 : game.team2
@@ -25,7 +26,7 @@ export default function GameResultsModal({ game, onClose }) {
 
           <div className="grid grid-cols-2 gap-4 mb-6">
             <div
-              className={`rounded-xl p-4 border ${
+              className={`rounded-xl p-4 border text-center ${
                 isTeam1Winner ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass'
               }`}
             >
@@ -33,7 +34,7 @@ export default function GameResultsModal({ game, onClose }) {
               <p className="text-2xl font-bold">{game.score1}</p>
             </div>
             <div
-              className={`rounded-xl p-4 border ${
+              className={`rounded-xl p-4 border text-center ${
                 !isTeam1Winner ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass'
               }`}
             >
@@ -60,7 +61,7 @@ export default function GameResultsModal({ game, onClose }) {
                     >
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-white block">
-                          R{i + 1} {r.caller} · {r.tricks} {r.suit}
+                          R{i + 1} {r.caller} · <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
                         </span>
                         <span className="text-xs text-white/60 mt-0.5">
                           {game.team1}: {run1} · {game.team2}: {run2}

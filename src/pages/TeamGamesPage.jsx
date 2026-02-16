@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getTeams, getGamesForTeam, deleteGame } from '@/lib/game-storage'
 import { useGame } from '@/lib/game-context'
@@ -73,15 +73,27 @@ export default function TeamGamesPage() {
     setGameToDelete(null)
   }
 
+  const { wins1, wins2 } = useMemo(() => {
+    const w1 = games.filter((g) => g.winner === 1).length
+    const w2 = games.filter((g) => g.winner === 2).length
+    return { wins1: w1, wins2: w2 }
+  }, [games])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 mb-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/teams')}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div>
-          <h2 className="font-semibold">{team.team1} vs {team.team2}</h2>
-          <p className="text-sm text-white/70">Previous games</p>
+        <div className="flex-1 grid grid-cols-2 gap-3">
+          <div className="rounded-xl p-4 glass border border-white/10 text-center">
+            <p className="text-2xl font-bold truncate">{team.team1}</p>
+            <p className="text-3xl font-bold text-app-gold mt-1">{wins1}</p>
+          </div>
+          <div className="rounded-xl p-4 glass border border-white/10 text-center">
+            <p className="text-2xl font-bold truncate">{team.team2}</p>
+            <p className="text-3xl font-bold text-app-gold mt-1">{wins2}</p>
+          </div>
         </div>
       </div>
 

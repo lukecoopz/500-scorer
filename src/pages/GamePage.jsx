@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { Trophy, ArrowLeft, Trash2, Spade, Club, Diamond, Heart } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
 import { getBidValue, TRICK_OPTIONS } from '@/lib/game-storage'
+import { RoundBidDisplay } from '@/lib/suit-icons'
 import GameResultsModal from '@/components/GameResultsModal'
 import { Button } from '@/components/ui/button'
 import {
@@ -112,24 +113,24 @@ export default function GamePage() {
         {/* Score cards */}
         <div className="grid grid-cols-2 gap-4">
           <div
-            className={`rounded-xl p-4 border-2 glass ${
+            className={`rounded-xl p-4 border-2 glass text-center ${
               isLeader1 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
             }`}
           >
-            <div className="flex justify-between items-start">
+            <div className="flex justify-center items-center gap-1.5">
               <span className="text-sm text-white/70 uppercase">{currentGame.team1}</span>
-              {isLeader1 && <Trophy className="w-5 h-5 text-app-gold" />}
+              {isLeader1 && <Trophy className="w-5 h-5 text-app-gold shrink-0" />}
             </div>
             <p className="text-3xl font-bold mt-2">{currentGame.score1}</p>
           </div>
           <div
-            className={`rounded-xl p-4 border-2 glass ${
+            className={`rounded-xl p-4 border-2 glass text-center ${
               isLeader2 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
             }`}
           >
-            <div className="flex justify-between items-start">
+            <div className="flex justify-center items-center gap-1.5">
               <span className="text-sm text-white/70 uppercase">{currentGame.team2}</span>
-              {isLeader2 && <Trophy className="w-5 h-5 text-app-gold" />}
+              {isLeader2 && <Trophy className="w-5 h-5 text-app-gold shrink-0" />}
             </div>
             <p className="text-3xl font-bold mt-2">{currentGame.score2}</p>
           </div>
@@ -259,7 +260,7 @@ export default function GamePage() {
                     >
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-white block">
-                          R{i + 1} {r.caller} called {r.tricks} {r.suit}
+                          R{i + 1} {r.caller} called <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
                         </span>
                         <span className="text-xs text-white/60 mt-0.5">
                           {currentGame.team1}: {run1} · {currentGame.team2}: {run2}
