@@ -13,7 +13,7 @@ export default function Layout({ children }) {
           </div>
         </Link>
         <Link
-          to="/"
+          to="/?new=1"
           className="flex items-center gap-1.5 text-sm text-white/70 hover:text-white"
         >
           <RefreshCw className="w-4 h-4" />

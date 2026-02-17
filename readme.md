@@ -5,7 +5,7 @@ A score keeper app for the 500 card game. Runs locally without any backend—all
 ## Features
 
 - **Start a new game** – Enter team names and start scoring
-- **Existing Teams** – View previously used teams and their game history
+- **Existing teams** – Listed on the home screen; tap a team to view games or start a new one
 - **Full scoring** – Supports all bid types: Spades, Clubs, Diamonds, Hearts, No Trumps, Misère, Open Misère
 - **Round history** – Track each round with bid details and points
 - **Game results** – See who won when a team reaches 500 points
