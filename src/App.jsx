@@ -4,7 +4,6 @@ import PageNotFound from './lib/PageNotFound'
 import Layout from './Layout'
 import BackButtonHandler from './components/BackButtonHandler'
 import StartPage from './pages/StartPage'
-import ExistingTeamsPage from './pages/ExistingTeamsPage'
 import TeamGamesPage from './pages/TeamGamesPage'
 import GamePage from './pages/GamePage'
 import BidPage from './pages/BidPage'
@@ -17,7 +16,6 @@ function App() {
         <BackButtonHandler />
         <Routes>
             <Route path="/" element={<Layout><StartPage /></Layout>} />
-            <Route path="/teams" element={<Layout><ExistingTeamsPage /></Layout>} />
             <Route path="/teams/:teamKey/games" element={<Layout><TeamGamesPage /></Layout>} />
             <Route path="/game/:gameId" element={<Layout><GamePage /></Layout>} />
             <Route path="/game/:gameId/bid" element={<Layout><BidPage /></Layout>} />

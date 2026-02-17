@@ -95,23 +95,35 @@ export default function GamePage() {
     setRoundToDelete(null)
   }
 
+  const rounds = currentGame.rounds || []
+  const roundsReversed = [...rounds].reverse()
+  const runningTotals = []
+  let run1 = 0
+  let run2 = 0
+  for (const r of rounds) {
+    run1 += r.pts1 ?? 0
+    run2 += r.pts2 ?? 0
+    runningTotals.push({ run1, run2 })
+  }
+
   return (
     <>
-      <div className="space-y-[10px]">
-        {/* Back button - navigate to team's games list */}
-        <div className="m-0">
-          <button
-            type="button"
-            onClick={() => navigate(`/teams/${encodeURIComponent(currentGame.teamKey)}/games`)}
-            className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-            aria-label="Back to games list"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        </div>
+      <div className="flex flex-col h-[calc(100vh-5.5rem)] min-h-0">
+        {/* Fixed top: back button, score cards, Who's Calling */}
+        <div className="flex-none space-y-[10px]">
+          <div className="mb-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate(`/teams/${encodeURIComponent(currentGame.teamKey)}/games`)}
+              aria-label="Back to games list"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          </div>
 
-        {/* Score cards */}
-        <div className="grid grid-cols-2 gap-4">
+          {/* Score cards */}
+          <div className="grid grid-cols-2 gap-4">
           <div
             className={`rounded-xl p-4 border-2 glass text-center ${
               isLeader1 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
@@ -239,21 +251,20 @@ export default function GamePage() {
             </div>
           )}
         </div>
+        </div>
 
-        {/* Round History */}
-        <div>
-          <h3 className="text-app-label text-sm font-medium mb-3">
-            ROUND HISTORY ({currentGame.rounds?.length || 0})
+        {/* Round History - scrollable, most recent first */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-4">
+          <h3 className="text-app-label text-sm font-medium mb-3 shrink-0">
+            ROUND HISTORY ({rounds.length})
           </h3>
-          {currentGame.rounds?.length ? (
-            <ul className="space-y-2">
-              {currentGame.rounds.reduce(
-                (acc, r, i) => {
-                  const prev1 = acc.running1
-                  const prev2 = acc.running2
-                  const run1 = prev1 + (r.pts1 ?? 0)
-                  const run2 = prev2 + (r.pts2 ?? 0)
-                  acc.items.push(
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {rounds.length ? (
+              <ul className="space-y-2 pb-2">
+                {roundsReversed.map((r, revIdx) => {
+                  const i = rounds.length - 1 - revIdx
+                  const { run1, run2 } = runningTotals[i] || { run1: 0, run2: 0 }
+                  return (
                     <li
                       key={i}
                       className="flex justify-between items-center p-3 rounded-lg glass gap-2"
@@ -284,16 +295,12 @@ export default function GamePage() {
                       </button>
                     </li>
                   )
-                  acc.running1 = run1
-                  acc.running2 = run2
-                  return acc
-                },
-                { items: [], running1: 0, running2: 0 }
-              ).items}
-            </ul>
-          ) : (
-            <p className="text-white/70 text-sm py-2">No rounds yet.</p>
-          )}
+                })}
+              </ul>
+            ) : (
+              <p className="text-white/70 text-sm py-2">No rounds yet.</p>
+            )}
+          </div>
         </div>
       </div>
 
