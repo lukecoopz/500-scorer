@@ -11,8 +11,8 @@ export default function GameResultsModal({ game, onClose }) {
     <Dialog.Root open={!!game.winner} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[#0d1117]/85" />
-        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-md translate-x-[-50%] translate-y-[-50%] rounded-xl glass-strong border-white/10 p-6 shadow-lg text-white">
-          <div className="flex items-center justify-between mb-6">
+        <Dialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-md max-h-[90vh] translate-x-[-50%] translate-y-[-50%] rounded-xl glass-strong border-white/10 p-6 shadow-lg text-white flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between mb-6 shrink-0">
             <div className="flex items-center gap-2">
               <Trophy className="w-6 h-6 text-app-gold" />
               <Dialog.Title className="text-xl font-bold">{winner} Won</Dialog.Title>
@@ -24,7 +24,7 @@ export default function GameResultsModal({ game, onClose }) {
             </Dialog.Close>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-6 shrink-0">
             <div
               className={`rounded-xl p-4 border text-center ${
                 isTeam1Winner ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass'
@@ -43,11 +43,11 @@ export default function GameResultsModal({ game, onClose }) {
             </div>
           </div>
 
-          <div>
-            <h4 className="text-app-label text-sm font-medium mb-3">
+          <div className="flex flex-col min-h-0 flex-1">
+            <h4 className="text-app-label text-sm font-medium mb-3 shrink-0">
               ROUNDS ({game.rounds?.length || 0})
             </h4>
-            <ul className="space-y-2">
+            <ul className="space-y-2 overflow-y-auto min-h-0 pr-1 -mr-1">
               {game.rounds?.reduce(
                 (acc, r, i) => {
                   const prev1 = acc.running1
@@ -86,7 +86,7 @@ export default function GameResultsModal({ game, onClose }) {
             </ul>
           </div>
 
-          <Button className="w-full mt-6 bg-app-green hover:bg-app-green/90 text-white" onClick={onClose}>
+          <Button className="w-full mt-6 bg-app-green hover:bg-app-green/90 text-white shrink-0" onClick={onClose}>
             Done
           </Button>
         </Dialog.Content>
