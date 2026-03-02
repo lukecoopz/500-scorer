@@ -101,7 +101,7 @@ export default function RecordTricksPage() {
           </h3>
           <div className="px-2">
             <Slider.Root
-              className="relative flex items-center w-full h-8"
+              className="relative flex items-center w-full h-10 touch-none"
               value={[tricksWon]}
               onValueChange={([v]) => setTricksWon(v)}
               min={0}
@@ -111,13 +111,22 @@ export default function RecordTricksPage() {
               <Slider.Track className="relative h-2 flex-1 rounded-full bg-white/10">
                 <Slider.Range className="absolute h-full rounded-full bg-white" />
               </Slider.Track>
-              <Slider.Thumb className="block w-6 h-6 rounded-full bg-white shadow-md border border-app-border focus:outline-none focus:ring-2 focus:ring-app-label" />
+              <Slider.Thumb className="block w-8 h-8 rounded-full bg-white shadow-md border border-app-border focus:outline-none focus:ring-2 focus:ring-app-label cursor-grab active:cursor-grabbing" />
             </Slider.Root>
-            <div className="flex justify-between mt-2 text-sm text-white/70">
+            <div className="flex justify-between mt-1">
               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                <span key={n} className={!isMisere && n === bidTricks ? 'text-app-gold font-medium' : ''}>
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setTricksWon(n)}
+                  className={`flex items-center justify-center w-8 h-8 text-sm rounded-full transition-colors
+                    ${n === tricksWon ? 'bg-white/20 font-bold text-white' : 'text-white/70'}
+                    ${!isMisere && n === bidTricks ? 'text-app-gold font-medium' : ''}
+                    ${n === tricksWon && !isMisere && n === bidTricks ? 'text-app-gold' : ''}
+                  `}
+                >
                   {n}
-                </span>
+                </button>
               ))}
             </div>
           </div>
