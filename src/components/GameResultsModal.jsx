@@ -59,22 +59,32 @@ export default function GameResultsModal({ game, onClose }) {
                       key={i}
                       className="flex justify-between items-center p-3 rounded-lg glass gap-2"
                     >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-white block">
-                          R{i + 1} {r.caller} · <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
-                        </span>
-                        <span className="text-xs text-white/60 mt-0.5">
-                          {game.team1}: {run1} · {game.team2}: {run2}
-                        </span>
-                      </div>
-                      <span className="flex gap-2 text-sm shrink-0">
-                        <span className={(r.pts1 ?? 0) >= 0 ? 'text-app-label' : 'text-red-400'}>
-                          {(r.pts1 ?? 0) >= 0 ? '+' : ''}{r.pts1}
-                        </span>
-                        <span className={(r.pts2 ?? 0) >= 0 ? 'text-white/70' : 'text-red-400'}>
-                          {(r.pts2 ?? 0) >= 0 ? '+' : ''}{r.pts2}
-                        </span>
-                      </span>
+                      {(() => {
+                        const caller1 = r.caller === game.team1
+                        const caller2 = r.caller === game.team2
+                        const pts1Color = (r.pts1 ?? 0) < 0 ? 'text-red-400' : caller1 ? 'text-green-400' : 'text-white/50'
+                        const pts2Color = (r.pts2 ?? 0) < 0 ? 'text-red-400' : caller2 ? 'text-green-400' : 'text-white/50'
+                        return (
+                          <>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm text-white block">
+                                R{i + 1} {r.caller} · <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
+                              </span>
+                              <span className="text-xs text-white/60 mt-0.5">
+                                {game.team1}: {run1} · {game.team2}: {run2}
+                              </span>
+                            </div>
+                            <span className="flex gap-2 text-sm shrink-0">
+                              <span className={pts1Color}>
+                                {(r.pts1 ?? 0) >= 0 ? '+' : ''}{r.pts1}
+                              </span>
+                              <span className={pts2Color}>
+                                {(r.pts2 ?? 0) >= 0 ? '+' : ''}{r.pts2}
+                              </span>
+                            </span>
+                          </>
+                        )
+                      })()}
                     </li>
                   )
                   acc.running1 = run1
