@@ -120,8 +120,14 @@ export default function TeamGamesPage() {
                   className="w-full flex items-center justify-between p-4 rounded-lg glass hover:bg-white/10 transition-colors text-left text-white pr-12"
                 >
                   <div>
-                    <p className="font-medium">
-                      {game.score1} - {game.score2}
+                    <p className="font-medium flex gap-3">
+                      <span className={game.winner === 1 ? 'text-green-400' : game.winner === 2 ? 'text-red-400' : ''}>
+                        {game.team1} {game.score1}
+                      </span>
+                      <span className="text-white/40">·</span>
+                      <span className={game.winner === 2 ? 'text-green-400' : game.winner === 1 ? 'text-red-400' : ''}>
+                        {game.team2} {game.score2}
+                      </span>
                     </p>
                     <p className="text-sm text-white/70">
                       {game.rounds?.length || 0} rounds
