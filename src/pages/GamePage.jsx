@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { Trophy, ArrowLeft, Trash2, Spade, Club, Diamond, Heart } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import * as Slider from '@radix-ui/react-slider'
+import { Trophy, ArrowLeft, Trash2, Check, Spade, Club, Diamond, Heart } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
-import { getBidValue, TRICK_OPTIONS } from '@/lib/game-storage'
+import { getBidValue, computeRoundResult, TRICK_OPTIONS } from '@/lib/game-storage'
 import { RoundBidDisplay } from '@/lib/suit-icons'
 import GameResultsModal from '@/components/GameResultsModal'
 import { Button } from '@/components/ui/button'
@@ -27,16 +28,18 @@ const suitIcons = {
   OM: <span className="text-app-purple font-medium">OM</span>,
 }
 
+const CALL_SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts', 'NT']
+
 export default function GamePage() {
   const { gameId } = useParams()
   const navigate = useNavigate()
-  const location = useLocation()
-  const { currentGame, loadGame, setBid, deleteRound } = useGame()
+  const { currentGame, loadGame, updateGame, setBid, confirmRound, deleteRound } = useGame()
   const [roundToDelete, setRoundToDelete] = useState(null)
 
   const [caller, setCaller] = useState(null)
   const [suit, setSuit] = useState(null)
   const [tricks, setTricks] = useState(null)
+  const [tricksWon, setTricksWon] = useState(null)
 
   useEffect(() => {
     if (gameId && (!currentGame || currentGame.id !== gameId)) {
@@ -44,14 +47,17 @@ export default function GamePage() {
     }
   }, [gameId, currentGame?.id, loadGame])
 
+  // Once a bid is confirmed (currentRound persisted), default the tricks-won slider
+  const hadRoundRef = useRef(false)
   useEffect(() => {
-    if (location.state?.editBid && currentGame?.currentRound) {
+    const hasRound = !!currentGame?.currentRound
+    if (hasRound && !hadRoundRef.current) {
       const r = currentGame.currentRound
-      setCaller(r.caller === currentGame.team1 ? 1 : 2)
-      setSuit(r.suit)
-      setTricks(r.suit === 'M' || r.suit === 'OM' ? null : r.tricks)
+      const misere = r.suit === 'M' || r.suit === 'OM'
+      setTricksWon(misere ? 0 : r.tricks)
     }
-  }, [location.state?.editBid, currentGame?.currentRound, currentGame?.team1])
+    hadRoundRef.current = hasRound
+  }, [currentGame?.currentRound])
 
   if (!currentGame || currentGame.id !== gameId) {
     return (
@@ -64,19 +70,79 @@ export default function GamePage() {
   const isLeader1 = currentGame.score1 >= currentGame.score2 && currentGame.score1 > 0
   const isLeader2 = currentGame.score2 > currentGame.score1
 
+  const round = currentGame.currentRound
+  const isRecordingTricks = !!round
+
   const isBidExpanded = caller != null
   const isMisere = suit === 'M' || suit === 'OM'
   const bidValue = suit ? getBidValue(suit, tricks) : 0
   const isBidComplete = caller != null && suit != null && (isMisere || tricks != null)
+  const selectedValue = isBidComplete ? bidValue : null
+
+  const isMisereRound = round && (round.suit === 'M' || round.suit === 'OM')
+  const roundResult = round && tricksWon != null
+    ? computeRoundResult(currentGame, round.caller, round.suit, round.tricks, tricksWon)
+    : null
+
+  // Only once tricks are being recorded (bid confirmed via Next) do we collapse to one card.
+  // Before that, both teams stay visible so the caller can still be changed.
+  const callLocked = isRecordingTricks
+  const activeCallerNum = isRecordingTricks
+    ? (round.caller === currentGame.team1 ? 1 : 2)
+    : caller
 
   const handleSelectCaller = (newCaller) => {
     setCaller(newCaller)
   }
 
+  const renderCallerCard = (teamNum) => {
+    const teamName = teamNum === 1 ? currentGame.team1 : currentGame.team2
+    const isThisCaller = isRecordingTricks ? round.caller === teamName : caller === teamNum
+    const showValue = isRecordingTricks ? isThisCaller : caller === teamNum && isBidComplete
+    const displaySuit = isRecordingTricks ? round.suit : suit
+    const displayTricks = isRecordingTricks ? round.tricks : tricks
+    const displayValue = isRecordingTricks ? round.bidValue : bidValue
+    const displayMisere = isRecordingTricks ? isMisereRound : isMisere
+
+    return (
+      <button
+        key={teamNum}
+        type="button"
+        onClick={() => (isRecordingTricks ? handleEditBid() : handleSelectCaller(teamNum))}
+        className={`rounded-xl py-1.5 px-3 border-2 text-left transition-colors ${
+          isThisCaller ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass hover:bg-white/5'
+        }`}
+      >
+        <span className="text-sm font-medium text-white uppercase">{teamName}</span>
+        {showValue && (
+          <span className="flex items-center gap-1 text-xs text-app-gold font-medium mt-0.5">
+            {!displayMisere && displayTricks}{suitIcons[displaySuit]} · {displayValue}
+          </span>
+        )}
+      </button>
+    )
+  }
+
   const handleNext = () => {
     if (!isBidComplete) return
     setBid(caller, suit, isMisere ? 0 : tricks)
-    navigate(`/game/${gameId}/tricks`)
+  }
+
+  const handleEditBid = () => {
+    if (!round) return
+    setCaller(round.caller === currentGame.team1 ? 1 : 2)
+    setSuit(round.suit)
+    setTricks(round.suit === 'M' || round.suit === 'OM' ? null : round.tricks)
+    updateGame({ currentRound: null })
+  }
+
+  const handleConfirmRoundTricks = () => {
+    if (tricksWon == null) return
+    confirmRound(tricksWon)
+    setCaller(null)
+    setSuit(null)
+    setTricks(null)
+    setTricksWon(null)
   }
 
   const handleDeleteRound = (e, index) => {
@@ -110,8 +176,8 @@ export default function GamePage() {
     <>
       <div className="flex flex-col h-[calc(100vh-5.5rem)] min-h-0">
         {/* Fixed top: back button, score cards, Who's Calling */}
-        <div className="flex-none space-y-[10px]">
-          <div className="mb-4">
+        <div className="flex-none space-y-2">
+          <div className="mb-1">
             <Button
               variant="ghost"
               size="icon"
@@ -123,139 +189,207 @@ export default function GamePage() {
           </div>
 
           {/* Score cards */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
           <div
-            className={`rounded-xl p-4 border-2 glass text-center ${
+            className={`rounded-xl p-2.5 border-2 glass text-center ${
               isLeader1 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
             }`}
           >
             <div className="flex justify-center items-center gap-1.5">
-              <span className="text-sm text-white/70 uppercase">{currentGame.team1}</span>
-              {isLeader1 && <Trophy className="w-5 h-5 text-app-gold shrink-0" />}
+              <span className="text-xs text-white/70 uppercase">{currentGame.team1}</span>
+              {isLeader1 && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
             </div>
-            <p className="text-3xl font-bold mt-2">{currentGame.score1}</p>
+            <p className="text-2xl font-bold mt-0.5">{currentGame.score1}</p>
+            {isRecordingTricks && roundResult ? (
+              <p className={`text-[11px] mt-0.5 ${
+                roundResult.pts1 > 0 ? 'text-green-400' : roundResult.pts1 < 0 ? 'text-destructive' : 'text-white/60'
+              }`}>
+                ({currentGame.score1 + roundResult.pts1})
+              </p>
+            ) : (
+              caller === 1 && bidValue > 0 && (
+                <p className="text-[11px] mt-0.5">
+                  <span className="text-green-400">{currentGame.score1 + bidValue} made</span>
+                  <span className="text-white/40"> / </span>
+                  <span className="text-destructive">{currentGame.score1 - bidValue} lost</span>
+                </p>
+              )
+            )}
           </div>
           <div
-            className={`rounded-xl p-4 border-2 glass text-center ${
+            className={`rounded-xl p-2.5 border-2 glass text-center ${
               isLeader2 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
             }`}
           >
             <div className="flex justify-center items-center gap-1.5">
-              <span className="text-sm text-white/70 uppercase">{currentGame.team2}</span>
-              {isLeader2 && <Trophy className="w-5 h-5 text-app-gold shrink-0" />}
+              <span className="text-xs text-white/70 uppercase">{currentGame.team2}</span>
+              {isLeader2 && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
             </div>
-            <p className="text-3xl font-bold mt-2">{currentGame.score2}</p>
+            <p className="text-2xl font-bold mt-0.5">{currentGame.score2}</p>
+            {isRecordingTricks && roundResult ? (
+              <p className={`text-[11px] mt-0.5 ${
+                roundResult.pts2 > 0 ? 'text-green-400' : roundResult.pts2 < 0 ? 'text-destructive' : 'text-white/60'
+              }`}>
+                ({currentGame.score2 + roundResult.pts2})
+              </p>
+            ) : (
+              caller === 2 && bidValue > 0 && (
+                <p className="text-[11px] mt-0.5">
+                  <span className="text-green-400">{currentGame.score2 + bidValue} made</span>
+                  <span className="text-white/40"> / </span>
+                  <span className="text-destructive">{currentGame.score2 - bidValue} lost</span>
+                </p>
+              )
+            )}
           </div>
         </div>
 
-        {/* Who's Calling - tap team to expand bid form */}
-        <div>
-          <h3 className="text-app-label text-sm font-medium mb-2">WHO'S CALLING?</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => handleSelectCaller(1)}
-              className={`rounded-xl py-2.5 px-3 border-2 text-left transition-colors ${
-                caller === 1 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass hover:bg-white/5'
-              }`}
-            >
-              <span className="text-sm font-medium text-white uppercase">{currentGame.team1}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectCaller(2)}
-              className={`rounded-xl py-2.5 px-3 border-2 text-left transition-colors ${
-                caller === 2 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass hover:bg-white/5'
-              }`}
-            >
-              <span className="text-sm font-medium text-white uppercase">{currentGame.team2}</span>
-            </button>
-          </div>
+        {!currentGame.winner && (
+          <div>
+            <h3 className="text-app-label text-xs font-medium mb-1">WHO'S CALLING?</h3>
+            <div className={callLocked ? 'grid grid-cols-1' : 'grid grid-cols-2 gap-2'}>
+              {callLocked ? renderCallerCard(activeCallerNum) : (
+                <>
+                  {renderCallerCard(1)}
+                  {renderCallerCard(2)}
+                </>
+              )}
+            </div>
 
-          {/* Expanded bid form - appears when a team is selected */}
-          {isBidExpanded && !currentGame.winner && (
-            <div className="mt-4 space-y-4">
-              {/* Suit */}
-              <div>
-                <h4 className="text-app-label text-sm font-medium mb-2">SUIT</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  {['Spades', 'Clubs', 'Diamonds', 'Hearts'].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSuit(s)}
-                      className={`rounded-xl flex items-center justify-center py-3 border transition-colors ${
-                        suit === s
-                          ? 'bg-app-selected border-app-selected text-foreground'
-                          : 'glass border-white/10 hover:bg-white/5'
-                      }`}
-                    >
-                      {suitIcons[s]}
-                    </button>
-                  ))}
+            {isRecordingTricks ? (
+              /* Record tricks - replaces the call grid once a bid is confirmed */
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-app-label text-xs font-medium">
+                    {isMisereRound ? 'TRICKS WON BY CALLER (0 = bid made)' : 'TRICKS WON BY CALLER'}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleEditBid}
+                    className="text-xs text-white/60 hover:text-white underline underline-offset-2"
+                  >
+                    Change bid
+                  </button>
                 </div>
-                <div className="flex gap-2 mt-2">
-                  {['NT', 'M', 'OM'].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSuit(s)}
-                      className={`rounded-xl flex-1 py-3 border transition-colors flex items-center justify-center ${
-                        suit === s
-                          ? 'bg-app-selected border-app-selected text-foreground'
-                          : 'glass border-white/10 hover:bg-white/5'
-                      }`}
-                    >
-                      {suitIcons[s]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tricks */}
-              {suit && !isMisere && (
-                <div>
-                  <h4 className="text-app-label text-sm font-medium mb-2">TRICKS BID</h4>
-                  <div className="flex gap-2">
-                    {TRICK_OPTIONS.map((t) => (
+                <div className="px-1">
+                  <Slider.Root
+                    className="relative flex items-center w-full h-8 touch-none"
+                    value={[tricksWon ?? 0]}
+                    onValueChange={([v]) => setTricksWon(v)}
+                    min={0}
+                    max={10}
+                    step={1}
+                  >
+                    <Slider.Track className="relative h-1.5 flex-1 rounded-full bg-white/10">
+                      <Slider.Range className="absolute h-full rounded-full bg-white" />
+                    </Slider.Track>
+                    <Slider.Thumb className="block w-6 h-6 rounded-full bg-white shadow-md border border-app-border focus:outline-none focus:ring-2 focus:ring-app-label cursor-grab active:cursor-grabbing" />
+                  </Slider.Root>
+                  <div className="flex justify-between mt-0.5">
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                       <button
-                        key={t}
+                        key={n}
                         type="button"
-                        onClick={() => setTricks(t)}
-                        className={`rounded-xl flex-1 py-3 border transition-colors ${
-                          tricks === t
-                            ? 'bg-app-selected border-app-selected text-foreground font-medium'
-                            : 'glass border-white/10 hover:bg-white/5'
-                        }`}
+                        onClick={() => setTricksWon(n)}
+                        className={`flex items-center justify-center w-6 h-6 text-xs rounded-full transition-colors
+                          ${n === tricksWon ? 'bg-white/20 font-bold text-white' : 'text-white/70'}
+                          ${!isMisereRound && n === round.tricks ? 'text-app-gold font-medium' : ''}
+                        `}
                       >
-                        {t}
+                        {n}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {/* Bid Value */}
-              <div className="rounded-lg glass-strong p-4">
-                <p className="text-sm text-app-label mb-1">BID VALUE</p>
-                <p className="text-3xl font-bold text-app-gold">{bidValue > 0 ? bidValue : '—'}</p>
+                {roundResult && (
+                  <p className={`text-sm font-medium ${roundResult.bidMade ? 'text-app-label' : 'text-destructive'}`}>
+                    {roundResult.bidMade ? 'Bid Made!' : 'Bid Lost'}
+                  </p>
+                )}
+
+                <Button
+                  className="w-full py-4 rounded-xl bg-app-gold hover:bg-app-gold/90 text-app-on-accent"
+                  onClick={handleConfirmRoundTricks}
+                >
+                  <Check className="w-5 h-5 mr-2" />
+                  Confirm Round
+                </Button>
               </div>
+            ) : (
+              /* Expanded bid form - appears when a team is selected */
+              isBidExpanded && (
+                <div className="mt-3 space-y-2">
+                  {/* Call: suit x tricks grid, plus Misere / Open Misere */}
+                  <div>
+                    <h4 className="text-app-label text-xs font-medium mb-1.5">CALL</h4>
+                    <div className="grid grid-cols-5 gap-1">
+                      {TRICK_OPTIONS.map((t) =>
+                        CALL_SUITS.map((s) => {
+                          const cellValue = getBidValue(s, t)
+                          const isSelected = suit === s && tricks === t
+                          const isLower = selectedValue != null && cellValue < selectedValue
+                          return (
+                            <button
+                              key={`${s}-${t}`}
+                              type="button"
+                              onClick={() => { setSuit(s); setTricks(t) }}
+                              className={`rounded-md flex flex-col items-center justify-center py-1 border transition-colors ${
+                                isSelected
+                                  ? 'bg-app-selected border-app-selected text-foreground'
+                                  : 'glass border-white/10 hover:bg-white/5'
+                              } ${isLower ? 'opacity-30 grayscale' : ''}`}
+                            >
+                              <span className="flex items-center gap-0.5 text-xs font-semibold">
+                                {t}{suitIcons[s]}
+                              </span>
+                              <span className="text-[9px] text-white/50 leading-tight">{cellValue}</span>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 mt-1">
+                      {['M', 'OM'].map((s) => {
+                        const cellValue = getBidValue(s)
+                        const isSelected = suit === s
+                        const isLower = selectedValue != null && cellValue < selectedValue
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => { setSuit(s); setTricks(null) }}
+                            className={`rounded-md flex items-center justify-between px-2.5 py-1.5 border transition-colors ${
+                              isSelected
+                                ? 'bg-app-selected border-app-selected text-foreground'
+                                : 'glass border-white/10 hover:bg-white/5'
+                            } ${isLower ? 'opacity-30 grayscale' : ''}`}
+                          >
+                            <span className="text-xs font-medium">{s === 'M' ? 'Misère' : 'Open Misère'}</span>
+                            <span className="text-[11px] text-white/50">{cellValue}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
 
-              <Button
-                className="w-full py-6 rounded-xl bg-app-green hover:bg-app-green/90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleNext}
-                disabled={!isBidComplete}
-              >
-                Next: Record Tricks
-              </Button>
-            </div>
-          )}
-        </div>
+                  <Button
+                    className="w-full py-4 rounded-xl bg-app-green hover:bg-app-green/90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleNext}
+                    disabled={!isBidComplete}
+                  >
+                    Next: Record Tricks{bidValue > 0 ? ` (${bidValue})` : ''}
+                  </Button>
+                </div>
+              )
+            )}
+          </div>
+        )}
         </div>
 
         {/* Round History - scrollable, most recent first */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-4">
-          <h3 className="text-app-label text-sm font-medium mb-3 shrink-0">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden mt-2">
+          <h3 className="text-app-label text-xs font-medium mb-1.5 shrink-0">
             ROUND HISTORY ({rounds.length})
           </h3>
           <div className="flex-1 min-h-0 overflow-y-auto">

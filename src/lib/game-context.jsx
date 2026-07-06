@@ -4,6 +4,7 @@ import {
   saveGame,
   createNewGame,
   getBidValue,
+  computeRoundResult,
 } from './game-storage'
 
 const GameContext = createContext(null)
@@ -44,52 +45,8 @@ export function GameProvider({ children }) {
 
   const confirmRound = useCallback((callerTricksWon) => {
     if (!currentGame?.currentRound) return
-    const { caller, suit, tricks: bidTricks, bidValue } = currentGame.currentRound
-    const bidMade = suit === 'M' || suit === 'OM'
-      ? callerTricksWon === 0
-      : callerTricksWon >= bidTricks
-
-    const isCallerTeam1 = caller === currentGame.team1
-    let pts1 = 0
-    let pts2 = 0
-
-    if (suit === 'M' || suit === 'OM') {
-      if (bidMade) {
-        if (isCallerTeam1) pts1 = bidValue
-        else pts2 = bidValue
-      } else {
-        if (isCallerTeam1) pts1 = -bidValue
-        else pts2 = -bidValue
-      }
-    } else {
-      const defenderTricks = 10 - callerTricksWon
-      const rawDefenderPts = defenderTricks * 10
-      // Defender points capped at 490: cannot win by creeping (must bid to reach 500)
-      const defenderCurrentScore = isCallerTeam1 ? currentGame.score2 : currentGame.score1
-      const defenderPts = Math.min(rawDefenderPts, Math.max(0, 490 - defenderCurrentScore))
-
-      if (bidMade) {
-        // Caller gets 250 if bid < 250 and they make all 10 tricks
-        let callerPts = bidValue
-        if (bidValue < 250 && callerTricksWon === 10) callerPts = 250
-
-        if (isCallerTeam1) {
-          pts1 = callerPts
-          pts2 = defenderPts
-        } else {
-          pts2 = callerPts
-          pts1 = defenderPts
-        }
-      } else {
-        if (isCallerTeam1) {
-          pts1 = -bidValue
-          pts2 = defenderPts
-        } else {
-          pts2 = -bidValue
-          pts1 = defenderPts
-        }
-      }
-    }
+    const { caller, suit, tricks: bidTricks } = currentGame.currentRound
+    const { pts1, pts2 } = computeRoundResult(currentGame, caller, suit, bidTricks, callerTricksWon)
 
     const newScore1 = currentGame.score1 + pts1
     const newScore2 = currentGame.score2 + pts2
