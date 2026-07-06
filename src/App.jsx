@@ -7,7 +7,6 @@ import StartPage from './pages/StartPage'
 import TeamGamesPage from './pages/TeamGamesPage'
 import GamePage from './pages/GamePage'
 import BidPage from './pages/BidPage'
-import RecordTricksPage from './pages/RecordTricksPage'
 
 function App() {
   return (
@@ -19,7 +18,6 @@ function App() {
             <Route path="/teams/:teamKey/games" element={<Layout><TeamGamesPage /></Layout>} />
             <Route path="/game/:gameId" element={<Layout><GamePage /></Layout>} />
             <Route path="/game/:gameId/bid" element={<Layout><BidPage /></Layout>} />
-            <Route path="/game/:gameId/tricks" element={<Layout><RecordTricksPage /></Layout>} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>

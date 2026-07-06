@@ -23,6 +23,51 @@ export function getBidValue(suit, tricks) {
   return BID_VALUES[suit]?.[tricks] ?? 0
 }
 
+/** Computes the outcome of a round given tricks won by the caller. `caller` is a team name (game.team1/team2). */
+export function computeRoundResult(game, caller, suit, tricks, tricksWon) {
+  const isMisere = suit === 'M' || suit === 'OM'
+  const bidValue = getBidValue(suit, tricks)
+  const bidMade = isMisere ? tricksWon === 0 : tricksWon >= tricks
+  const isCallerTeam1 = caller === game.team1
+  let pts1 = 0
+  let pts2 = 0
+
+  if (isMisere) {
+    const callerPts = bidMade ? bidValue : -bidValue
+    if (isCallerTeam1) pts1 = callerPts
+    else pts2 = callerPts
+  } else {
+    const defenderTricks = 10 - tricksWon
+    const rawDefenderPts = defenderTricks * 10
+    // Defender points capped at 490: cannot win by creeping (must bid to reach 500)
+    const defenderCurrentScore = isCallerTeam1 ? game.score2 : game.score1
+    const defenderPts = Math.min(rawDefenderPts, Math.max(0, 490 - defenderCurrentScore))
+
+    if (bidMade) {
+      // Caller gets 250 if bid < 250 and they make all 10 tricks
+      let callerPts = bidValue
+      if (bidValue < 250 && tricksWon === 10) callerPts = 250
+      if (isCallerTeam1) {
+        pts1 = callerPts
+        pts2 = defenderPts
+      } else {
+        pts2 = callerPts
+        pts1 = defenderPts
+      }
+    } else {
+      if (isCallerTeam1) {
+        pts1 = -bidValue
+        pts2 = defenderPts
+      } else {
+        pts2 = -bidValue
+        pts1 = defenderPts
+      }
+    }
+  }
+
+  return { bidMade, bidValue, pts1, pts2 }
+}
+
 function normalizeTeamKey(team1, team2) {
   const names = [team1.trim(), team2.trim()].sort()
   return names.join('::')
