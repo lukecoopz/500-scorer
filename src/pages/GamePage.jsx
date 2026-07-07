@@ -23,9 +23,9 @@ const suitIcons = {
   Clubs: <Club className="w-5 h-5" />,
   Diamonds: <Diamond className="w-5 h-5 text-app-pink" />,
   Hearts: <Heart className="w-5 h-5 text-app-pink" />,
-  NT: <span className="text-app-gold font-medium">NT</span>,
-  M: <span className="text-app-purple font-medium">M</span>,
-  OM: <span className="text-app-purple font-medium">OM</span>,
+  NT: <span className="inline-flex items-center justify-center w-5 h-5 text-app-gold font-medium">NT</span>,
+  M: <span className="inline-flex items-center justify-center w-5 h-5 text-app-purple font-medium">M</span>,
+  OM: <span className="inline-flex items-center justify-center w-5 h-5 text-app-purple font-medium">OM</span>,
 }
 
 const CALL_SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts', 'NT']
@@ -114,11 +114,13 @@ export default function GamePage() {
         }`}
       >
         <span className="text-sm font-medium text-white uppercase">{teamName}</span>
-        {showValue && (
-          <span className="flex items-center gap-1 text-xs text-app-gold font-medium mt-0.5">
-            {!displayMisere && displayTricks}{suitIcons[displaySuit]} · {displayValue}
-          </span>
-        )}
+        <span className={`flex items-center gap-1 text-xs text-app-gold font-medium mt-0.5 ${showValue ? '' : 'invisible'}`}>
+          {showValue ? (
+            <>{!displayMisere && displayTricks}{suitIcons[displaySuit]} · {displayValue}</>
+          ) : (
+            ' '
+          )}
+        </span>
       </button>
     )
   }
@@ -200,21 +202,23 @@ export default function GamePage() {
               {isLeader1 && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
             </div>
             <p className="text-2xl font-bold mt-0.5">{currentGame.score1}</p>
-            {isRecordingTricks && roundResult ? (
-              <p className={`text-[11px] mt-0.5 ${
-                roundResult.pts1 > 0 ? 'text-green-400' : roundResult.pts1 < 0 ? 'text-destructive' : 'text-white/60'
-              }`}>
-                ({currentGame.score1 + roundResult.pts1})
-              </p>
-            ) : (
-              caller === 1 && bidValue > 0 && (
-                <p className="text-[11px] mt-0.5">
+            <p className={`text-[11px] leading-tight mt-0.5 min-h-[2.1em] flex flex-wrap items-center justify-center ${
+              isRecordingTricks && roundResult
+                ? (roundResult.pts1 > 0 ? 'text-green-400' : roundResult.pts1 < 0 ? 'text-destructive' : 'text-white/60')
+                : ''
+            } ${!((isRecordingTricks && roundResult) || (caller === 1 && bidValue > 0)) ? 'invisible' : ''}`}>
+              {isRecordingTricks && roundResult ? (
+                `(${currentGame.score1 + roundResult.pts1})`
+              ) : caller === 1 && bidValue > 0 ? (
+                <>
                   <span className="text-green-400">{currentGame.score1 + bidValue} made</span>
-                  <span className="text-white/40"> / </span>
+                  <span className="text-white/40">&nbsp;/&nbsp;</span>
                   <span className="text-destructive">{currentGame.score1 - bidValue} lost</span>
-                </p>
-              )
-            )}
+                </>
+              ) : (
+                ' '
+              )}
+            </p>
           </div>
           <div
             className={`rounded-xl p-2.5 border-2 glass text-center ${
@@ -226,21 +230,23 @@ export default function GamePage() {
               {isLeader2 && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
             </div>
             <p className="text-2xl font-bold mt-0.5">{currentGame.score2}</p>
-            {isRecordingTricks && roundResult ? (
-              <p className={`text-[11px] mt-0.5 ${
-                roundResult.pts2 > 0 ? 'text-green-400' : roundResult.pts2 < 0 ? 'text-destructive' : 'text-white/60'
-              }`}>
-                ({currentGame.score2 + roundResult.pts2})
-              </p>
-            ) : (
-              caller === 2 && bidValue > 0 && (
-                <p className="text-[11px] mt-0.5">
+            <p className={`text-[11px] leading-tight mt-0.5 min-h-[2.1em] flex flex-wrap items-center justify-center ${
+              isRecordingTricks && roundResult
+                ? (roundResult.pts2 > 0 ? 'text-green-400' : roundResult.pts2 < 0 ? 'text-destructive' : 'text-white/60')
+                : ''
+            } ${!((isRecordingTricks && roundResult) || (caller === 2 && bidValue > 0)) ? 'invisible' : ''}`}>
+              {isRecordingTricks && roundResult ? (
+                `(${currentGame.score2 + roundResult.pts2})`
+              ) : caller === 2 && bidValue > 0 ? (
+                <>
                   <span className="text-green-400">{currentGame.score2 + bidValue} made</span>
-                  <span className="text-white/40"> / </span>
+                  <span className="text-white/40">&nbsp;/&nbsp;</span>
                   <span className="text-destructive">{currentGame.score2 - bidValue} lost</span>
-                </p>
-              )
-            )}
+                </>
+              ) : (
+                ' '
+              )}
+            </p>
           </div>
         </div>
 
