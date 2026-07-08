@@ -16,7 +16,7 @@ npm run build
 
 # 3. Sync with Capacitor
 echo "🔄 Syncing with Capacitor..."
-npx cap copy android
+npx cap sync android
 
 # 4. Build the APK
 echo "🏗️  Building APK..."
