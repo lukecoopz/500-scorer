@@ -84,6 +84,12 @@ export default function GamePage() {
     ? computeRoundResult(currentGame, round.caller, round.suit, round.tricks, tricksWon)
     : null
 
+  // Notify when the calling team's bid, if made, would reach 500 and win the game.
+  const callerScore = caller === 1 ? currentGame.score1 : caller === 2 ? currentGame.score2 : 0
+  const isWinningCall = isBidExpanded && bidValue > 0 && callerScore + bidValue >= 500
+  const roundCallerScore = round ? (round.caller === currentGame.team1 ? currentGame.score1 : currentGame.score2) : 0
+  const isWinningRound = isRecordingTricks && round.bidValue > 0 && roundCallerScore + round.bidValue >= 500
+
   // Only once tricks are being recorded (bid confirmed via Next) do we collapse to one card.
   // Before that, both teams stay visible so the caller can still be changed.
   const callLocked = isRecordingTricks
@@ -277,6 +283,12 @@ export default function GamePage() {
                     Change bid
                   </button>
                 </div>
+                {isWinningRound && (
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-app-gold bg-app-gold/10 border border-app-gold/30 rounded-lg px-2.5 py-1.5">
+                    <Trophy className="w-3.5 h-3.5 shrink-0" />
+                    Bid wins the game if made!
+                  </div>
+                )}
                 <div className="px-1">
                   <Slider.Root
                     className="relative flex items-center w-full h-8 touch-none"
@@ -378,6 +390,13 @@ export default function GamePage() {
                       })}
                     </div>
                   </div>
+
+                  {isWinningCall && (
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-app-gold bg-app-gold/10 border border-app-gold/30 rounded-lg px-2.5 py-1.5">
+                      <Trophy className="w-3.5 h-3.5 shrink-0" />
+                      Bid wins the game if made!
+                    </div>
+                  )}
 
                   <Button
                     className="w-full py-4 rounded-xl bg-app-green hover:bg-app-green/90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
