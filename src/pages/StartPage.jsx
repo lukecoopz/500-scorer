@@ -120,13 +120,17 @@ export default function StartPage() {
       <div
         className={`flex flex-col items-center ${hasTeams ? 'h-[calc(100vh-5.5rem)] min-h-0 pt-8' : 'min-h-[calc(100vh-8rem)] justify-center'}`}
       >
-        <div className={`text-center ${hasTeams ? 'mb-6 shrink-0' : 'mb-10'}`}>
+        <button
+          type="button"
+          onClick={() => setSearchParams({ new: '1' })}
+          className={`text-center rounded-xl transition-colors hover:bg-white/5 active:bg-white/10 p-4 -m-4 ${hasTeams ? 'mb-6 shrink-0' : 'mb-10'}`}
+        >
           <div className="w-16 h-16 mx-auto mb-4 rounded-xl glass flex items-center justify-center text-3xl">
             🃏
           </div>
           <h1 className="text-4xl font-bold">500</h1>
           <p className="text-white/70 text-lg">Score Keeper</p>
-        </div>
+        </button>
 
         {hasTeams && (
           <div className="flex-1 min-h-0 flex flex-col w-full max-w-sm overflow-hidden">
