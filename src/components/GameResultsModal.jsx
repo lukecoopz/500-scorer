@@ -1,21 +1,24 @@
 import { Trophy, X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
-import { RoundBidDisplay } from '@/lib/suit-icons'
+import { RoundBidDisplay, suitIcons } from '@/lib/suit-icons'
 
 export default function GameResultsModal({ game, onClose }) {
-  const winner = game.winner === 1 ? game.team1 : game.team2
-  const isTeam1Winner = game.winner === 1
+  const isIndividual = game.mode === 'individual'
+  const names = isIndividual ? game.players : game.teams
+  const scores = game.scores
+  const winnerName = game.winner != null ? names[game.winner] : null
+  const gridColsClass = names.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'
 
   return (
-    <Dialog.Root open={!!game.winner} onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root open={game.winner != null} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-[#0d1117]/85" />
         <Dialog.Content className="fixed left-[50%] top-[50%] z-50 w-full max-w-md max-h-[90vh] translate-x-[-50%] translate-y-[-50%] rounded-xl glass-strong border-white/10 p-6 shadow-lg text-white flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-6 shrink-0">
             <div className="flex items-center gap-2">
               <Trophy className="w-6 h-6 text-app-gold" />
-              <Dialog.Title className="text-xl font-bold">{winner} Won</Dialog.Title>
+              <Dialog.Title className="text-xl font-bold">{winnerName} Won</Dialog.Title>
             </div>
             <Dialog.Close asChild>
               <Button variant="ghost" size="icon">
@@ -24,23 +27,18 @@ export default function GameResultsModal({ game, onClose }) {
             </Dialog.Close>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-6 shrink-0">
-            <div
-              className={`rounded-xl p-4 border text-center ${
-                isTeam1Winner ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass'
-              }`}
-            >
-              <p className="text-sm text-white/70">{game.team1}</p>
-              <p className="text-2xl font-bold">{game.score1}</p>
-            </div>
-            <div
-              className={`rounded-xl p-4 border text-center ${
-                !isTeam1Winner ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass'
-              }`}
-            >
-              <p className="text-sm text-white/70">{game.team2}</p>
-              <p className="text-2xl font-bold">{game.score2}</p>
-            </div>
+          <div className={`grid gap-4 mb-6 shrink-0 ${gridColsClass}`}>
+            {names.map((name, i) => (
+              <div
+                key={i}
+                className={`rounded-xl p-4 border text-center ${
+                  i === game.winner ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass'
+                }`}
+              >
+                <p className="text-sm text-white/70 truncate">{name}</p>
+                <p className="text-2xl font-bold">{scores[i]}</p>
+              </div>
+            ))}
           </div>
 
           <div className="flex flex-col min-h-0 flex-1">
@@ -50,48 +48,42 @@ export default function GameResultsModal({ game, onClose }) {
             <ul className="space-y-2 overflow-y-auto min-h-0 pr-1 -mr-1">
               {game.rounds?.reduce(
                 (acc, r, i) => {
-                  const prev1 = acc.running1
-                  const prev2 = acc.running2
-                  const run1 = prev1 + (r.pts1 ?? 0)
-                  const run2 = prev2 + (r.pts2 ?? 0)
+                  const totals = names.map((_, ni) => (acc.running[ni] || 0) + (r.pts?.[ni] ?? 0))
+                  const callerName = names[r.callerIndex]
+                  const partnerName = isIndividual && r.partnerIndex != null ? names[r.partnerIndex] : null
                   acc.items.push(
                     <li
                       key={i}
                       className="flex justify-between items-center p-3 rounded-lg glass gap-2"
                     >
-                      {(() => {
-                        const caller1 = r.caller === game.team1
-                        const caller2 = r.caller === game.team2
-                        const pts1Color = (r.pts1 ?? 0) < 0 ? 'text-red-400' : caller1 ? 'text-green-400' : 'text-white/50'
-                        const pts2Color = (r.pts2 ?? 0) < 0 ? 'text-red-400' : caller2 ? 'text-green-400' : 'text-white/50'
-                        return (
-                          <>
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm text-white block">
-                                R{i + 1} {r.caller} · <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
-                              </span>
-                              <span className="text-xs text-white/60 mt-0.5">
-                                {game.team1}: {run1} · {game.team2}: {run2}
-                              </span>
-                            </div>
-                            <span className="flex gap-2 text-sm shrink-0">
-                              <span className={pts1Color}>
-                                {(r.pts1 ?? 0) >= 0 ? '+' : ''}{r.pts1}
-                              </span>
-                              <span className={pts2Color}>
-                                {(r.pts2 ?? 0) >= 0 ? '+' : ''}{r.pts2}
-                              </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-white block">
+                          R{i + 1} {callerName}{partnerName ? ` & ${partnerName}` : ''}
+                          {r.calledAceSuit && <> (<span className="inline-flex items-center align-middle">{suitIcons[r.calledAceSuit]}</span> ace)</>}
+                          {' '}· <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
+                        </span>
+                        <span className="text-xs text-white/60 mt-0.5 block">
+                          {names.map((n, ni) => `${n}: ${totals[ni]}`).join(' · ')}
+                        </span>
+                      </div>
+                      <span className="flex gap-2 text-sm shrink-0 flex-wrap justify-end max-w-[30%]">
+                        {names.map((n, ni) => {
+                          const pts = r.pts?.[ni] ?? 0
+                          const isCaller = ni === r.callerIndex || ni === r.partnerIndex
+                          const color = pts < 0 ? 'text-red-400' : isCaller ? 'text-green-400' : 'text-white/50'
+                          return (
+                            <span key={ni} className={color}>
+                              {pts >= 0 ? '+' : ''}{pts}
                             </span>
-                          </>
-                        )
-                      })()}
+                          )
+                        })}
+                      </span>
                     </li>
                   )
-                  acc.running1 = run1
-                  acc.running2 = run2
+                  acc.running = totals
                   return acc
                 },
-                { items: [], running1: 0, running2: 0 }
+                { items: [], running: names.map(() => 0) }
               ).items}
             </ul>
           </div>

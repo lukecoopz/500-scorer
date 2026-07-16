@@ -2,9 +2,11 @@ import { createContext, useContext, useState, useCallback } from 'react'
 import {
   getGameById,
   saveGame,
-  createNewGame,
+  createTeamGame,
+  createIndividualGame,
   getBidValue,
-  computeRoundResult,
+  computeTeamRoundResult,
+  computeIndividualRoundResult,
 } from './game-storage'
 
 const GameContext = createContext(null)
@@ -12,8 +14,14 @@ const GameContext = createContext(null)
 export function GameProvider({ children }) {
   const [currentGame, setCurrentGame] = useState(null)
 
-  const startNewGame = useCallback((team1, team2) => {
-    const game = createNewGame(team1, team2)
+  const startNewTeamGame = useCallback((teamNames) => {
+    const game = createTeamGame(teamNames)
+    setCurrentGame(game)
+    return game
+  }, [])
+
+  const startNewIndividualGame = useCallback((playerNames) => {
+    const game = createIndividualGame(playerNames)
     setCurrentGame(game)
     return game
   }, [])
@@ -31,42 +39,39 @@ export function GameProvider({ children }) {
     setCurrentGame(updated)
   }, [currentGame])
 
-  const setBid = useCallback((caller, suit, tricks) => {
+  const setBid = useCallback((callerIndex, suit, tricks) => {
     if (!currentGame) return
     const bidValue = getBidValue(suit, tricks)
-    const round = {
-      caller: caller === 1 ? currentGame.team1 : currentGame.team2,
-      suit,
-      tricks,
-      bidValue,
-    }
+    const round = { callerIndex, suit, tricks, bidValue }
     updateGame({ currentRound: round })
   }, [currentGame, updateGame])
 
-  const confirmRound = useCallback((callerTricksWon) => {
+  const confirmRound = useCallback((callerTricksWon, partnerIndex, calledAceSuit) => {
     if (!currentGame?.currentRound) return
-    const { caller, suit, tricks: bidTricks } = currentGame.currentRound
-    const { pts1, pts2 } = computeRoundResult(currentGame, caller, suit, bidTricks, callerTricksWon)
+    const { callerIndex, suit, tricks: bidTricks } = currentGame.currentRound
+    const { pts, bidMade } = currentGame.mode === 'individual'
+      ? computeIndividualRoundResult(currentGame, callerIndex, partnerIndex, suit, bidTricks, callerTricksWon)
+      : computeTeamRoundResult(currentGame, callerIndex, suit, bidTricks, callerTricksWon)
 
-    const newScore1 = currentGame.score1 + pts1
-    const newScore2 = currentGame.score2 + pts2
+    const newScores = currentGame.scores.map((s, i) => s + pts[i])
     const rounds = [
       ...currentGame.rounds,
       {
         ...currentGame.currentRound,
+        ...(currentGame.mode === 'individual' ? { partnerIndex, calledAceSuit } : {}),
         callerTricksWon,
-        pts1,
-        pts2,
+        bidMade,
+        pts,
       },
     ]
-    const winner = newScore1 >= 500 ? 1 : newScore2 >= 500 ? 2 : null
+    const winnerIndex = newScores.findIndex((s) => s >= 500)
+    const winner = winnerIndex === -1 ? null : winnerIndex
     updateGame({
-      score1: newScore1,
-      score2: newScore2,
+      scores: newScores,
       rounds,
       currentRound: null,
       winner,
-      endedAt: winner ? Date.now() : undefined,
+      endedAt: winner != null ? Date.now() : undefined,
     })
   }, [currentGame, updateGame])
 
@@ -74,15 +79,14 @@ export function GameProvider({ children }) {
     if (!currentGame?.rounds?.[roundIndex]) return
     const round = currentGame.rounds[roundIndex]
     const newRounds = currentGame.rounds.filter((_, i) => i !== roundIndex)
-    const newScore1 = currentGame.score1 - (round.pts1 || 0)
-    const newScore2 = currentGame.score2 - (round.pts2 || 0)
-    const winner = newScore1 >= 500 ? 1 : newScore2 >= 500 ? 2 : null
+    const newScores = currentGame.scores.map((s, i) => s - (round.pts?.[i] || 0))
+    const winnerIndex = newScores.findIndex((s) => s >= 500)
+    const winner = winnerIndex === -1 ? null : winnerIndex
     updateGame({
-      score1: newScore1,
-      score2: newScore2,
+      scores: newScores,
       rounds: newRounds,
-      winner: winner || undefined,
-      endedAt: winner ? currentGame.endedAt : undefined,
+      winner,
+      endedAt: winner != null ? currentGame.endedAt : undefined,
     })
   }, [currentGame, updateGame])
 
@@ -90,7 +94,8 @@ export function GameProvider({ children }) {
     <GameContext.Provider
       value={{
         currentGame,
-        startNewGame,
+        startNewTeamGame,
+        startNewIndividualGame,
         loadGame,
         updateGame,
         setBid,

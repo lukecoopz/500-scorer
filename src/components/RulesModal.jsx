@@ -40,8 +40,8 @@ export default function RulesModal({ open, onOpenChange }) {
 
           <Tabs.Root defaultValue="2-4" className="flex-1 min-h-0 flex flex-col">
             <Tabs.List className="flex gap-1 mx-6 mb-3 p-1 rounded-lg bg-white/5 shrink-0">
-              <Tabs.Trigger value="2-4" className={tabTriggerClass}>2-4 Players</Tabs.Trigger>
-              <Tabs.Trigger value="5" className={tabTriggerClass}>5 Players</Tabs.Trigger>
+              <Tabs.Trigger value="2-4" className={tabTriggerClass}>Fixed Partners</Tabs.Trigger>
+              <Tabs.Trigger value="5" className={tabTriggerClass}>Call a Partner</Tabs.Trigger>
             </Tabs.List>
 
             <Tabs.Content
@@ -50,7 +50,7 @@ export default function RulesModal({ open, onOpenChange }) {
             >
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">OBJECTIVE</h3>
-                <p>Played with 2, 3, or 4 players in fixed teams (solo or pairs). First team to reach 500 points wins. Each round, one team calls (bids) a suit and number of tricks; the other team defends.</p>
+                <p>Played with 2 or 3 fixed teams (solo or in pairs) for the whole game. First team to reach 500 points wins. Each round, one team calls (bids) a suit and number of tricks; the other team(s) defend.</p>
               </section>
 
               <section>
@@ -89,12 +89,14 @@ export default function RulesModal({ open, onOpenChange }) {
                 <h3 className="text-app-label text-xs font-medium mb-1.5">MISÈRE</h3>
                 <p><span className="text-app-purple font-medium">Misère</span> (250 pts): caller bids to lose every trick.<br />
                 <span className="text-app-purple font-medium">Open Misère</span> (500 pts): same, but the caller's hand is played face-up on the table.</p>
+                <p className="mt-1.5">Misère is played solo, even in a team game &mdash; the caller&apos;s partner puts their hand down and sits out the hand entirely.</p>
               </section>
 
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">SCORING A ROUND</h3>
                 <p>If the caller makes their bid (or misère), they score the bid value. If they fail, they lose the bid value instead.</p>
-                <p className="mt-1.5">The defending team scores 10 points per trick they win, whether or not the caller's bid succeeds. Defenders can&apos;t win the game by defending &mdash; their points are capped just short of 500, so only a successful call can finish the game.</p>
+                <p className="mt-1.5">Each other team scores 10 points per trick they win, whether or not the caller's bid succeeds (with 3 teams, the two non-calling teams are scored independently of each other). Defenders can&apos;t win the game by defending &mdash; their points are capped just short of 500, so only a successful call can finish the game.</p>
+                <p className="mt-1.5">Misère reverses this: since the caller is trying to win zero tricks, each other team instead scores 10 points for every trick the misère caller ends up winning.</p>
               </section>
 
               <section>
@@ -114,23 +116,24 @@ export default function RulesModal({ open, onOpenChange }) {
             >
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">OBJECTIVE</h3>
-                <p>Played with 5 players, everyone for themselves. Bidding, bid values, misère, and going-out-the-back-door all work exactly as in the 2-4 player game &mdash; the only difference is how a team is formed each hand.</p>
+                <p>Played with 3 or more players, everyone for themselves &mdash; no fixed partners. Bidding, bid values, and going-out-the-back-door all work exactly as in the team game &mdash; the only difference is how a team is formed each hand.</p>
               </section>
 
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">CALLING A PARTNER</h3>
-                <p>Whoever wins the bidding calls an ace they don&apos;t hold themselves. Whoever holds that ace becomes their partner for the hand &mdash; the partnership isn&apos;t revealed until that ace is played. The caller and their partner are the "team" of two; the other three players defend individually.</p>
+                <p>Whoever wins the bidding calls an ace they don&apos;t hold themselves. Whoever holds that ace becomes their partner for the hand &mdash; the partnership isn&apos;t revealed until that ace is played. The caller and their partner are the "team" of two; everyone else defends as a group.</p>
               </section>
 
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">SCORING</h3>
-                <p>If the bid is made, the caller and their partner score the bid value. If it&apos;s lost, they lose the bid value instead &mdash; same as the 2-4 player rules.</p>
-                <p className="mt-1.5">Each of the other three players scores individually for defending: 10 points per trick they personally win, capped the same way as the 2-4 player game so defenders can&apos;t creep to a win.</p>
+                <p>If the bid is made, the caller and their partner each score the full bid value. If it&apos;s lost, they each lose the full bid value instead &mdash; same amount as the team game, just credited to two players instead of one team.</p>
+                <p className="mt-1.5">Everyone else scores as a group for defending: 10 points per trick the defending side wins, credited to all of them equally regardless of who actually took the trick, capped the same way as the team game so they can&apos;t creep to a win.</p>
               </section>
 
               <section>
-                <h3 className="text-app-label text-xs font-medium mb-1.5">APP SUPPORT</h3>
-                <p>The app doesn&apos;t have a dedicated 5-player mode yet &mdash; this tab documents the rules ahead of that being built.</p>
+                <h3 className="text-app-label text-xs font-medium mb-1.5">MISÈRE IS SOLO</h3>
+                <p>Misère and Open Misère are played alone &mdash; no partner is called, it&apos;s the caller against everyone else. The caller scores (or loses) the bid value by themselves.</p>
+                <p className="mt-1.5">Defending is reversed here too: since the caller is trying to win zero tricks, everyone else scores 10 points for every trick the misère caller ends up winning, split equally the same way as normal defending.</p>
               </section>
             </Tabs.Content>
           </Tabs.Root>
