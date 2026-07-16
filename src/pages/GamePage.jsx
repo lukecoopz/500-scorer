@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import * as Slider from '@radix-ui/react-slider'
 import { Trophy, ArrowLeft, Trash2, Check, Spade, Club, Diamond, Heart } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
-import { getBidValue, computeRoundResult, TRICK_OPTIONS } from '@/lib/game-storage'
+import { getBidValue, computeTeamRoundResult, computeIndividualRoundResult, TRICK_OPTIONS } from '@/lib/game-storage'
 import { RoundBidDisplay } from '@/lib/suit-icons'
 import GameResultsModal from '@/components/GameResultsModal'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ const suitIcons = {
 }
 
 const CALL_SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts', 'NT']
+const ACE_SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts']
 
 export default function GamePage() {
   const { gameId } = useParams()
@@ -40,6 +41,8 @@ export default function GamePage() {
   const [suit, setSuit] = useState(null)
   const [tricks, setTricks] = useState(null)
   const [tricksWon, setTricksWon] = useState(null)
+  const [partner, setPartner] = useState(null)
+  const [calledAceSuit, setCalledAceSuit] = useState(null)
 
   useEffect(() => {
     if (gameId && (!currentGame || currentGame.id !== gameId)) {
@@ -67,8 +70,12 @@ export default function GamePage() {
     )
   }
 
-  const isLeader1 = currentGame.score1 >= currentGame.score2 && currentGame.score1 > 0
-  const isLeader2 = currentGame.score2 > currentGame.score1
+  const isIndividual = currentGame.mode === 'individual'
+  const names = isIndividual ? currentGame.players : currentGame.teams
+  const scores = currentGame.scores
+  const gridColsClass = names.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'
+  const maxScore = Math.max(...scores)
+  const leaderIndex = maxScore > 0 ? scores.indexOf(maxScore) : -1
 
   const round = currentGame.currentRound
   const isRecordingTricks = !!round
@@ -80,31 +87,39 @@ export default function GamePage() {
   const selectedValue = isBidComplete ? bidValue : null
 
   const isMisereRound = round && (round.suit === 'M' || round.suit === 'OM')
-  const roundResult = round && tricksWon != null
-    ? computeRoundResult(currentGame, round.caller, round.suit, round.tricks, tricksWon)
+  const needsPartner = isIndividual && !isMisereRound
+  const canPreviewRound = round && tricksWon != null && (!needsPartner || partner != null)
+  const roundResult = canPreviewRound
+    ? (isIndividual
+        ? computeIndividualRoundResult(currentGame, round.callerIndex, partner, round.suit, round.tricks, tricksWon)
+        : computeTeamRoundResult(currentGame, round.callerIndex, round.suit, round.tricks, tricksWon))
     : null
 
-  // Notify when the calling team's bid, if made, would reach 500 and win the game.
-  const callerScore = caller === 1 ? currentGame.score1 : caller === 2 ? currentGame.score2 : 0
+  // Notify when the calling side's bid, if made, would reach 500 and win the game.
+  const callerScore = caller != null ? scores[caller] : 0
   const isWinningCall = isBidExpanded && bidValue > 0 && callerScore + bidValue >= 500
-  const roundCallerScore = round ? (round.caller === currentGame.team1 ? currentGame.score1 : currentGame.score2) : 0
+  const roundCallerScore = round ? scores[round.callerIndex] : 0
   const isWinningRound = isRecordingTricks && round.bidValue > 0 && roundCallerScore + round.bidValue >= 500
 
   // Only once tricks are being recorded (bid confirmed via Next) do we collapse to one card.
-  // Before that, both teams stay visible so the caller can still be changed.
+  // Before that, all teams/players stay visible so the caller can still be changed.
   const callLocked = isRecordingTricks
-  const activeCallerNum = isRecordingTricks
-    ? (round.caller === currentGame.team1 ? 1 : 2)
-    : caller
+  const activeCallerIndex = isRecordingTricks ? round.callerIndex : caller
 
-  const handleSelectCaller = (newCaller) => {
-    setCaller(newCaller)
+  const handleSelectCaller = (idx) => {
+    if (caller === idx) {
+      setCaller(null)
+      setSuit(null)
+      setTricks(null)
+    } else {
+      setCaller(idx)
+    }
   }
 
-  const renderCallerCard = (teamNum) => {
-    const teamName = teamNum === 1 ? currentGame.team1 : currentGame.team2
-    const isThisCaller = isRecordingTricks ? round.caller === teamName : caller === teamNum
-    const showValue = isRecordingTricks ? isThisCaller : caller === teamNum && isBidComplete
+  const renderCallerCard = (idx) => {
+    const name = names[idx]
+    const isThisCaller = isRecordingTricks ? round.callerIndex === idx : caller === idx
+    const showValue = isRecordingTricks ? isThisCaller : caller === idx && isBidComplete
     const displaySuit = isRecordingTricks ? round.suit : suit
     const displayTricks = isRecordingTricks ? round.tricks : tricks
     const displayValue = isRecordingTricks ? round.bidValue : bidValue
@@ -112,19 +127,19 @@ export default function GamePage() {
 
     return (
       <button
-        key={teamNum}
+        key={idx}
         type="button"
-        onClick={() => (isRecordingTricks ? handleEditBid() : handleSelectCaller(teamNum))}
+        onClick={() => (isRecordingTricks ? handleEditBid() : handleSelectCaller(idx))}
         className={`rounded-xl py-1.5 px-3 border-2 text-left transition-colors ${
           isThisCaller ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10 glass hover:bg-white/5'
         }`}
       >
-        <span className="text-sm font-medium text-white uppercase">{teamName}</span>
+        <span className="text-sm font-medium text-white uppercase truncate block">{name}</span>
         <span className={`flex items-center gap-1 text-xs text-app-gold font-medium mt-0.5 ${showValue ? '' : 'invisible'}`}>
           {showValue ? (
             <>{!displayMisere && displayTricks}{suitIcons[displaySuit]} · {displayValue}</>
           ) : (
-            ' '
+            ' '
           )}
         </span>
       </button>
@@ -138,19 +153,24 @@ export default function GamePage() {
 
   const handleEditBid = () => {
     if (!round) return
-    setCaller(round.caller === currentGame.team1 ? 1 : 2)
+    setCaller(round.callerIndex)
     setSuit(round.suit)
     setTricks(round.suit === 'M' || round.suit === 'OM' ? null : round.tricks)
+    setPartner(null)
+    setCalledAceSuit(null)
     updateGame({ currentRound: null })
   }
 
   const handleConfirmRoundTricks = () => {
     if (tricksWon == null) return
-    confirmRound(tricksWon)
+    if (needsPartner && partner == null) return
+    confirmRound(tricksWon, needsPartner ? partner : undefined, needsPartner ? calledAceSuit : undefined)
     setCaller(null)
     setSuit(null)
     setTricks(null)
     setTricksWon(null)
+    setPartner(null)
+    setCalledAceSuit(null)
   }
 
   const handleDeleteRound = (e, index) => {
@@ -172,12 +192,10 @@ export default function GamePage() {
   const rounds = currentGame.rounds || []
   const roundsReversed = [...rounds].reverse()
   const runningTotals = []
-  let run1 = 0
-  let run2 = 0
+  let running = names.map(() => 0)
   for (const r of rounds) {
-    run1 += r.pts1 ?? 0
-    run2 += r.pts2 ?? 0
-    runningTotals.push({ run1, run2 })
+    running = running.map((s, i) => s + (r.pts?.[i] ?? 0))
+    runningTotals.push(running)
   }
 
   return (
@@ -197,75 +215,50 @@ export default function GamePage() {
           </div>
 
           {/* Score cards */}
-          <div className="grid grid-cols-2 gap-3">
-          <div
-            className={`rounded-xl p-2.5 border-2 glass text-center ${
-              isLeader1 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
-            }`}
-          >
-            <div className="flex justify-center items-center gap-1.5">
-              <span className="text-xs text-white/70 uppercase">{currentGame.team1}</span>
-              {isLeader1 && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
-            </div>
-            <p className="text-2xl font-bold mt-0.5">{currentGame.score1}</p>
-            <p className={`text-[11px] leading-tight mt-0.5 min-h-[2.1em] flex flex-wrap items-center justify-center ${
-              isRecordingTricks && roundResult
-                ? (roundResult.pts1 > 0 ? 'text-green-400' : roundResult.pts1 < 0 ? 'text-destructive' : 'text-white/60')
-                : ''
-            } ${!((isRecordingTricks && roundResult) || (caller === 1 && bidValue > 0)) ? 'invisible' : ''}`}>
-              {isRecordingTricks && roundResult ? (
-                `(${currentGame.score1 + roundResult.pts1})`
-              ) : caller === 1 && bidValue > 0 ? (
-                <>
-                  <span className="text-green-400">{currentGame.score1 + bidValue} made</span>
-                  <span className="text-white/40">&nbsp;/&nbsp;</span>
-                  <span className="text-destructive">{currentGame.score1 - bidValue} lost</span>
-                </>
-              ) : (
-                ' '
-              )}
-            </p>
+          <div className={`grid gap-3 ${gridColsClass}`}>
+            {names.map((name, i) => {
+              const score = scores[i]
+              const delta = roundResult ? roundResult.pts[i] : null
+              const showBidPreview = !isRecordingTricks && caller === i && bidValue > 0
+              return (
+                <div
+                  key={i}
+                  className={`rounded-xl p-2.5 border-2 glass text-center ${
+                    i === leaderIndex ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
+                  }`}
+                >
+                  <div className="flex justify-center items-center gap-1.5">
+                    <span className="text-xs text-white/70 uppercase truncate">{name}</span>
+                    {i === leaderIndex && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
+                  </div>
+                  <p className="text-2xl font-bold mt-0.5">{score}</p>
+                  <p className={`text-[11px] leading-tight mt-0.5 min-h-[2.1em] flex flex-wrap items-center justify-center ${
+                    delta != null
+                      ? (delta > 0 ? 'text-green-400' : delta < 0 ? 'text-destructive' : 'text-white/60')
+                      : ''
+                  } ${!(delta != null || showBidPreview) ? 'invisible' : ''}`}>
+                    {delta != null ? (
+                      `(${score + delta})`
+                    ) : showBidPreview ? (
+                      <>
+                        <span className="text-green-400">{score + bidValue} made</span>
+                        <span className="text-white/40">&nbsp;/&nbsp;</span>
+                        <span className="text-destructive">{score - bidValue} lost</span>
+                      </>
+                    ) : (
+                      ' '
+                    )}
+                  </p>
+                </div>
+              )
+            })}
           </div>
-          <div
-            className={`rounded-xl p-2.5 border-2 glass text-center ${
-              isLeader2 ? 'border-app-gold/80 bg-app-gold/10' : 'border-white/10'
-            }`}
-          >
-            <div className="flex justify-center items-center gap-1.5">
-              <span className="text-xs text-white/70 uppercase">{currentGame.team2}</span>
-              {isLeader2 && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
-            </div>
-            <p className="text-2xl font-bold mt-0.5">{currentGame.score2}</p>
-            <p className={`text-[11px] leading-tight mt-0.5 min-h-[2.1em] flex flex-wrap items-center justify-center ${
-              isRecordingTricks && roundResult
-                ? (roundResult.pts2 > 0 ? 'text-green-400' : roundResult.pts2 < 0 ? 'text-destructive' : 'text-white/60')
-                : ''
-            } ${!((isRecordingTricks && roundResult) || (caller === 2 && bidValue > 0)) ? 'invisible' : ''}`}>
-              {isRecordingTricks && roundResult ? (
-                `(${currentGame.score2 + roundResult.pts2})`
-              ) : caller === 2 && bidValue > 0 ? (
-                <>
-                  <span className="text-green-400">{currentGame.score2 + bidValue} made</span>
-                  <span className="text-white/40">&nbsp;/&nbsp;</span>
-                  <span className="text-destructive">{currentGame.score2 - bidValue} lost</span>
-                </>
-              ) : (
-                ' '
-              )}
-            </p>
-          </div>
-        </div>
 
         {!currentGame.winner && (
           <div>
             <h3 className="text-app-label text-xs font-medium mb-1">WHO'S CALLING?</h3>
-            <div className={callLocked ? 'grid grid-cols-1' : 'grid grid-cols-2 gap-2'}>
-              {callLocked ? renderCallerCard(activeCallerNum) : (
-                <>
-                  {renderCallerCard(1)}
-                  {renderCallerCard(2)}
-                </>
-              )}
+            <div className={callLocked ? 'grid grid-cols-1' : `grid gap-2 ${gridColsClass}`}>
+              {callLocked ? renderCallerCard(activeCallerIndex) : names.map((_, i) => renderCallerCard(i))}
             </div>
 
             {isRecordingTricks ? (
@@ -273,7 +266,7 @@ export default function GamePage() {
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-app-label text-xs font-medium">
-                    {isMisereRound ? 'TRICKS WON BY CALLER (0 = bid made)' : 'TRICKS WON BY CALLER'}
+                    {isMisereRound ? 'TRICKS WON BY CALLER (0 = bid made)' : isIndividual ? "TRICKS WON BY CALLER'S SIDE" : 'TRICKS WON BY CALLER'}
                   </h4>
                   <button
                     type="button"
@@ -289,6 +282,55 @@ export default function GamePage() {
                     Bid wins the game if made!
                   </div>
                 )}
+
+                {needsPartner && (
+                  <div>
+                    <h4 className="text-app-label text-xs font-medium mb-1.5">CALLED PARTNER</h4>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {names.map((name, i) => {
+                        if (i === round.callerIndex) return null
+                        const isSelected = partner === i
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setPartner(i)}
+                            className={`rounded-lg px-2.5 py-2 border text-sm font-medium transition-colors truncate ${
+                              isSelected
+                                ? 'bg-app-selected border-app-selected text-foreground'
+                                : 'glass border-white/10 hover:bg-white/5 text-white'
+                            }`}
+                          >
+                            {name}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <h4 className="text-app-label text-xs font-medium mb-1.5 mt-2">ACE CALLED (OPTIONAL)</h4>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {ACE_SUITS.map((s) => {
+                        const isSelected = calledAceSuit === s
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setCalledAceSuit(isSelected ? null : s)}
+                            className={`rounded-lg py-2 border flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? 'bg-app-selected border-app-selected text-foreground'
+                                : 'glass border-white/10 hover:bg-white/5'
+                            }`}
+                            aria-label={`Ace of ${s}`}
+                          >
+                            {suitIcons[s]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="px-1">
                   <Slider.Root
                     className="relative flex items-center w-full h-8 touch-none"
@@ -327,15 +369,16 @@ export default function GamePage() {
                 )}
 
                 <Button
-                  className="w-full py-4 rounded-xl bg-app-gold hover:bg-app-gold/90 text-app-on-accent"
+                  className="w-full py-4 rounded-xl bg-app-gold hover:bg-app-gold/90 text-app-on-accent disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleConfirmRoundTricks}
+                  disabled={needsPartner && partner == null}
                 >
                   <Check className="w-5 h-5 mr-2" />
                   Confirm Round
                 </Button>
               </div>
             ) : (
-              /* Expanded bid form - appears when a team is selected */
+              /* Expanded bid form - appears when a team/player is selected */
               isBidExpanded && (
                 <div className="mt-3 space-y-2">
                   {/* Call: suit x tricks grid, plus Misere / Open Misere */}
@@ -351,7 +394,9 @@ export default function GamePage() {
                             <button
                               key={`${s}-${t}`}
                               type="button"
-                              onClick={() => { setSuit(s); setTricks(t) }}
+                              onClick={() => {
+                                if (isSelected) { setSuit(null); setTricks(null) } else { setSuit(s); setTricks(t) }
+                              }}
                               className={`rounded-md flex flex-col items-center justify-center py-1 border transition-colors ${
                                 isSelected
                                   ? 'bg-app-selected border-app-selected text-foreground'
@@ -376,7 +421,7 @@ export default function GamePage() {
                           <button
                             key={s}
                             type="button"
-                            onClick={() => { setSuit(s); setTricks(null) }}
+                            onClick={() => { setSuit(isSelected ? null : s); setTricks(null) }}
                             className={`rounded-md flex items-center justify-between px-2.5 py-1.5 border transition-colors ${
                               isSelected
                                 ? 'bg-app-selected border-app-selected text-foreground'
@@ -422,19 +467,9 @@ export default function GamePage() {
               <ul className="space-y-2 pb-2">
                 {roundsReversed.map((r, revIdx) => {
                   const i = rounds.length - 1 - revIdx
-                  const { run1, run2 } = runningTotals[i] || { run1: 0, run2: 0 }
-                  const caller1 = r.caller === currentGame.team1
-                  const caller2 = r.caller === currentGame.team2
-                  const pts1Color = r.pts1 < 0
-                    ? 'text-red-400'
-                    : caller1
-                      ? 'text-green-400'
-                      : 'text-white/50'
-                  const pts2Color = r.pts2 < 0
-                    ? 'text-red-400'
-                    : caller2
-                      ? 'text-green-400'
-                      : 'text-white/50'
+                  const totals = runningTotals[i] || names.map(() => 0)
+                  const callerName = names[r.callerIndex]
+                  const partnerName = isIndividual && r.partnerIndex != null ? names[r.partnerIndex] : null
                   return (
                     <li
                       key={i}
@@ -442,19 +477,25 @@ export default function GamePage() {
                     >
                       <div className="flex-1 min-w-0">
                         <span className="text-sm text-white block">
-                          R{i + 1} {r.caller} called <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
+                          R{i + 1} {callerName}{partnerName ? ` & ${partnerName}` : ''}
+                          {r.calledAceSuit && <> (<span className="inline-flex items-center align-middle">{suitIcons[r.calledAceSuit]}</span> ace)</>}
+                          {' '}called <RoundBidDisplay tricks={r.tricks} suit={r.suit} />
                         </span>
-                        <span className="text-xs text-white/60 mt-0.5">
-                          {currentGame.team1}: {run1} · {currentGame.team2}: {run2}
+                        <span className="text-xs text-white/60 mt-0.5 block">
+                          {names.map((n, ni) => `${n}: ${totals[ni]}`).join(' · ')}
                         </span>
                       </div>
-                      <span className="flex gap-2 text-sm shrink-0">
-                        <span className={pts1Color}>
-                          {r.pts1 >= 0 ? '+' : ''}{r.pts1}
-                        </span>
-                        <span className={pts2Color}>
-                          {r.pts2 >= 0 ? '+' : ''}{r.pts2}
-                        </span>
+                      <span className="flex gap-2 text-sm shrink-0 flex-wrap justify-end max-w-[30%]">
+                        {names.map((n, ni) => {
+                          const pts = r.pts?.[ni] ?? 0
+                          const isCaller = ni === r.callerIndex || ni === r.partnerIndex
+                          const color = pts < 0 ? 'text-red-400' : isCaller ? 'text-green-400' : 'text-white/50'
+                          return (
+                            <span key={ni} className={color}>
+                              {pts >= 0 ? '+' : ''}{pts}
+                            </span>
+                          )
+                        })}
                       </span>
                       <button
                         type="button"
@@ -475,7 +516,7 @@ export default function GamePage() {
         </div>
       </div>
 
-      {currentGame.winner && (
+      {currentGame.winner != null && (
         <GameResultsModal
           game={currentGame}
           onClose={() => navigate(`/teams/${encodeURIComponent(currentGame.teamKey)}/games`)}
@@ -488,7 +529,7 @@ export default function GamePage() {
             <AlertDialogTitle>Delete this round?</AlertDialogTitle>
             <AlertDialogDescription className="text-white/70">
               {roundToDelete !== null && currentGame.rounds?.[roundToDelete]
-                ? `Remove R${roundToDelete + 1} ${currentGame.rounds[roundToDelete].caller} called ${currentGame.rounds[roundToDelete].tricks} ${currentGame.rounds[roundToDelete].suit}? Scores will be updated.`
+                ? `Remove R${roundToDelete + 1} ${names[currentGame.rounds[roundToDelete].callerIndex]} called ${currentGame.rounds[roundToDelete].tricks} ${currentGame.rounds[roundToDelete].suit}? Scores will be updated.`
                 : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>

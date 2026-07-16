@@ -16,6 +16,10 @@ export const BID_VALUES = {
 
 export const SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts', 'NT', 'M', 'OM']
 export const TRICK_OPTIONS = [6, 7, 8, 9, 10]
+export const TEAM_COUNTS = [2, 3]
+export const MIN_INDIVIDUAL_PLAYERS = 3
+export const MAX_INDIVIDUAL_PLAYERS = 8
+export const DEFAULT_INDIVIDUAL_PLAYERS = 5
 
 export function getBidValue(suit, tricks) {
   if (suit === 'M') return 250
@@ -23,84 +27,118 @@ export function getBidValue(suit, tricks) {
   return BID_VALUES[suit]?.[tricks] ?? 0
 }
 
-/** Computes the outcome of a round given tricks won by the caller. `caller` is a team name (game.team1/team2). */
-export function computeRoundResult(game, caller, suit, tricks, tricksWon) {
+/** Generalized N-team scoring. `game.scores` holds each team's current (pre-round) score. */
+export function computeTeamRoundResult(game, callerIndex, suit, tricks, tricksWon) {
   const isMisere = suit === 'M' || suit === 'OM'
   const bidValue = getBidValue(suit, tricks)
   const bidMade = isMisere ? tricksWon === 0 : tricksWon >= tricks
-  const isCallerTeam1 = caller === game.team1
-  let pts1 = 0
-  let pts2 = 0
+  const teamCount = game.scores.length
+  const pts = new Array(teamCount).fill(0)
 
-  if (isMisere) {
-    const callerPts = bidMade ? bidValue : -bidValue
-    if (isCallerTeam1) pts1 = callerPts
-    else pts2 = callerPts
-  } else {
-    const defenderTricks = 10 - tricksWon
-    const rawDefenderPts = defenderTricks * 10
-    // Defender points capped at 490: cannot win by creeping (must bid to reach 500)
-    const defenderCurrentScore = isCallerTeam1 ? game.score2 : game.score1
-    const defenderPts = Math.min(rawDefenderPts, Math.max(0, 490 - defenderCurrentScore))
+  let callerPts = bidValue
+  if (bidMade && !isMisere && bidValue < 250 && tricksWon === 10) callerPts = 250
+  pts[callerIndex] = bidMade ? callerPts : -bidValue
 
-    if (bidMade) {
-      // Caller gets 250 if bid < 250 and they make all 10 tricks
-      let callerPts = bidValue
-      if (bidValue < 250 && tricksWon === 10) callerPts = 250
-      if (isCallerTeam1) {
-        pts1 = callerPts
-        pts2 = defenderPts
-      } else {
-        pts2 = callerPts
-        pts1 = defenderPts
-      }
-    } else {
-      if (isCallerTeam1) {
-        pts1 = -bidValue
-        pts2 = defenderPts
-      } else {
-        pts2 = -bidValue
-        pts1 = defenderPts
-      }
-    }
+  // Defender points capped at 490 each: cannot win by creeping (must bid to reach 500).
+  // Normally each other team scores for tricks *they* win. In Misère it's reversed: the
+  // caller plays alone (their partner sits out), so every other team scores for tricks
+  // the misère caller ends up winning, since the caller is trying to win none.
+  const rawDefenderPts = (isMisere ? tricksWon : 10 - tricksWon) * 10
+  for (let i = 0; i < teamCount; i++) {
+    if (i === callerIndex) continue
+    pts[i] = Math.min(rawDefenderPts, Math.max(0, 490 - game.scores[i]))
   }
 
-  return { bidMade, bidValue, pts1, pts2 }
+  return { bidMade, bidValue, pts }
 }
 
-function normalizeTeamKey(team1, team2) {
-  const names = [team1.trim(), team2.trim()].sort()
-  return names.join('::')
+/**
+ * Individual (call-a-partner) scoring. For suit/NT bids, the caller and their called partner
+ * both score the full bid value (or lose it, together) as if they were a 2-person team, and
+ * everyone else defends as a group: whoever actually won the trick doesn't matter, they all
+ * score the same 10-points-per-defending-trick, capped at 490 using whichever of them is
+ * lowest so they stay in lockstep. Misère/Open Misère is a solo bid - caller plays alone, no
+ * partner, and it's reversed: everyone else scores 10 points for every trick the misère
+ * caller ends up winning, since the caller is trying to win none.
+ */
+export function computeIndividualRoundResult(game, callerIndex, partnerIndex, suit, tricks, tricksWon) {
+  const isMisere = suit === 'M' || suit === 'OM'
+  const bidValue = getBidValue(suit, tricks)
+  const bidMade = isMisere ? tricksWon === 0 : tricksWon >= tricks
+  const playerCount = game.scores.length
+  const pts = new Array(playerCount).fill(0)
+
+  let callerPts = bidValue
+  if (bidMade && !isMisere && bidValue < 250 && tricksWon === 10) callerPts = 250
+  const finalCallerPts = bidMade ? callerPts : -bidValue
+  pts[callerIndex] = finalCallerPts
+  if (!isMisere) pts[partnerIndex] = finalCallerPts
+
+  const otherIndices = []
+  for (let i = 0; i < playerCount; i++) {
+    if (i !== callerIndex && i !== partnerIndex) otherIndices.push(i)
+  }
+  const rawGroupPts = (isMisere ? tricksWon : 10 - tricksWon) * 10
+  const minOtherScore = Math.min(...otherIndices.map((i) => game.scores[i]))
+  const groupPts = Math.min(rawGroupPts, Math.max(0, 490 - minOtherScore))
+  for (const i of otherIndices) pts[i] = groupPts
+
+  return { bidMade, bidValue, pts }
+}
+
+function normalizeGroupKey(names) {
+  return names.map((n) => n.trim()).sort().join('::')
+}
+
+/** Upgrades a legacy (pre-multiplayer) 2-team game record to the generalized shape. No-op for current-shape games. */
+function normalizeGame(game) {
+  if (!game || game.mode) return game
+  return {
+    ...game,
+    mode: 'team',
+    teams: [game.team1, game.team2],
+    scores: [game.score1 ?? 0, game.score2 ?? 0],
+    rounds: (game.rounds || []).map((r) => ({
+      ...r,
+      callerIndex: r.caller === game.team2 ? 1 : 0,
+      pts: [r.pts1 ?? 0, r.pts2 ?? 0],
+    })),
+    currentRound: game.currentRound
+      ? { ...game.currentRound, callerIndex: game.currentRound.caller === game.team2 ? 1 : 0 }
+      : null,
+    winner: game.winner === 1 ? 0 : game.winner === 2 ? 1 : null,
+  }
 }
 
 export function getTeams() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TEAMS)
-    return raw ? JSON.parse(raw) : []
+    const all = raw ? JSON.parse(raw) : []
+    return all.map((t) => ({
+      ...t,
+      names: t.names || [t.team1, t.team2],
+      mode: t.mode || 'team',
+    }))
   } catch {
     return []
   }
 }
 
-export function addTeam(team1, team2) {
-  const key = normalizeTeamKey(team1, team2)
-  const teams = getTeams()
-  if (teams.some(t => t.key === key)) return
-  teams.push({
-    key,
-    team1: team1.trim(),
-    team2: team2.trim(),
-    createdAt: Date.now(),
-  })
-  localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(teams))
+export function addGroup(names, mode) {
+  const key = normalizeGroupKey(names)
+  const raw = localStorage.getItem(STORAGE_KEYS.TEAMS)
+  const all = raw ? JSON.parse(raw) : []
+  if (all.some((t) => t.key === key)) return
+  all.push({ key, names: names.map((n) => n.trim()), mode, createdAt: Date.now() })
+  localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(all))
 }
 
-export function deleteTeam(teamKey) {
-  const teams = getTeams().filter(t => t.key !== teamKey)
+export function deleteGroup(teamKey) {
+  const teams = getTeams().filter((t) => t.key !== teamKey)
   localStorage.setItem(STORAGE_KEYS.TEAMS, JSON.stringify(teams))
   const raw = localStorage.getItem(STORAGE_KEYS.GAMES)
   const all = raw ? JSON.parse(raw) : []
-  const remaining = all.filter(g => g.teamKey !== teamKey)
+  const remaining = all.filter((g) => g.teamKey !== teamKey)
   localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(remaining))
 }
 
@@ -108,7 +146,10 @@ export function getGamesForTeam(teamKey) {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.GAMES)
     const all = raw ? JSON.parse(raw) : []
-    return all.filter(g => g.teamKey === teamKey).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
+    return all
+      .filter((g) => g.teamKey === teamKey)
+      .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
+      .map(normalizeGame)
   } catch {
     return []
   }
@@ -118,7 +159,7 @@ export function getGameById(gameId) {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.GAMES)
     const all = raw ? JSON.parse(raw) : []
-    return all.find(g => g.id === gameId)
+    return normalizeGame(all.find((g) => g.id === gameId))
   } catch {
     return null
   }
@@ -127,7 +168,7 @@ export function getGameById(gameId) {
 export function saveGame(game) {
   const raw = localStorage.getItem(STORAGE_KEYS.GAMES)
   const all = raw ? JSON.parse(raw) : []
-  const idx = all.findIndex(g => g.id === game.id)
+  const idx = all.findIndex((g) => g.id === game.id)
   if (idx >= 0) all[idx] = game
   else all.push(game)
   localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(all))
@@ -136,22 +177,44 @@ export function saveGame(game) {
 export function deleteGame(gameId) {
   const raw = localStorage.getItem(STORAGE_KEYS.GAMES)
   const all = raw ? JSON.parse(raw) : []
-  const remaining = all.filter(g => g.id !== gameId)
+  const remaining = all.filter((g) => g.id !== gameId)
   localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(remaining))
 }
 
-export function createNewGame(team1, team2) {
-  const key = normalizeTeamKey(team1, team2)
-  addTeam(team1, team2)
+/** Team game: 2, 4, or 6 players as fixed partners (teamNames.length teams of 2, or 2 solo teams). */
+export function createTeamGame(teamNames) {
+  const names = teamNames.map((n, i) => n.trim() || `Team ${i + 1}`)
+  const key = normalizeGroupKey(names)
+  addGroup(names, 'team')
   const game = {
     id: crypto.randomUUID(),
+    mode: 'team',
     teamKey: key,
-    team1: team1.trim(),
-    team2: team2.trim(),
-    score1: 0,
-    score2: 0,
+    teams: names,
+    scores: names.map(() => 0),
     rounds: [],
     currentRound: null,
+    winner: null,
+    startedAt: Date.now(),
+  }
+  saveGame(game)
+  return game
+}
+
+/** Individual game: 5 players, no fixed partners - caller calls an ace for a partner each hand. */
+export function createIndividualGame(playerNames) {
+  const names = playerNames.map((n, i) => n.trim() || `Player ${i + 1}`)
+  const key = normalizeGroupKey(names)
+  addGroup(names, 'individual')
+  const game = {
+    id: crypto.randomUUID(),
+    mode: 'individual',
+    teamKey: key,
+    players: names,
+    scores: names.map(() => 0),
+    rounds: [],
+    currentRound: null,
+    winner: null,
     startedAt: Date.now(),
   }
   saveGame(game)
