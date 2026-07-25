@@ -4,7 +4,8 @@ import { Capacitor } from '@capacitor/core'
 
 /**
  * Handles Android hardware back button when running in Capacitor.
- * Navigates back in React Router history; exits app when at root.
+ * Closes any open Radix dialog first; otherwise navigates back in
+ * React Router history, exiting the app when at root.
  */
 export default function BackButtonHandler() {
   const navigate = useNavigate()
@@ -17,6 +18,11 @@ export default function BackButtonHandler() {
     const setupListener = async () => {
       const { App } = await import('@capacitor/app')
       listener = await App.addListener('backButton', () => {
+        const openDialog = document.querySelector('[role="dialog"]')
+        if (openDialog) {
+          openDialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+          return
+        }
         if (window.location.pathname === '/' || window.location.pathname === '') {
           App.exitApp()
         } else {
