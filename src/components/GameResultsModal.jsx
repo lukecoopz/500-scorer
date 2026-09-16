@@ -2,6 +2,7 @@ import { Trophy, X } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Button } from '@/components/ui/button'
 import { RoundBidDisplay, suitIcons } from '@/lib/suit-icons'
+import { getDealerNameForRound } from '@/lib/game-storage'
 
 export default function GameResultsModal({ game, onClose }) {
   const isIndividual = game.mode === 'individual'
@@ -27,6 +28,12 @@ export default function GameResultsModal({ game, onClose }) {
             </Dialog.Close>
           </div>
 
+          {game.winMode === 'hands' && (
+            <p className="text-sm text-white/60 -mt-3 mb-4">
+              Best of {game.targetHands || game.rounds?.length || 4} hands — highest score wins
+            </p>
+          )}
+
           <div className={`grid gap-4 mb-6 shrink-0 ${gridColsClass}`}>
             {names.map((name, i) => (
               <div
@@ -51,6 +58,7 @@ export default function GameResultsModal({ game, onClose }) {
                   const totals = names.map((_, ni) => (acc.running[ni] || 0) + (r.pts?.[ni] ?? 0))
                   const callerName = names[r.callerIndex]
                   const partnerName = isIndividual && r.partnerIndex != null ? names[r.partnerIndex] : null
+                  const dealerName = getDealerNameForRound(game, i)
                   acc.items.push(
                     <li
                       key={i}
@@ -65,6 +73,9 @@ export default function GameResultsModal({ game, onClose }) {
                         <span className="text-xs text-white/60 mt-0.5 block">
                           {names.map((n, ni) => `${n}: ${totals[ni]}`).join(' · ')}
                         </span>
+                        {dealerName && (
+                          <span className="text-xs text-white/50 mt-0.5 block">Dealer: {dealerName}</span>
+                        )}
                       </div>
                       <span className="flex gap-2 text-sm shrink-0 flex-wrap justify-end max-w-[30%]">
                         {names.map((n, ni) => {

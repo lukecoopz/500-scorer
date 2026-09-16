@@ -6,7 +6,9 @@ A score keeper app for the 500 card game. Runs locally without any backend—all
 
 - **Start a new game** – Enter team names and start scoring
 - **Existing teams** – Listed on the home screen; tap a team to view games or start a new one
-- **Full scoring** – Supports all bid types: Spades, Clubs, Diamonds, Hearts, No Trumps, Misère, Open Misère
+- **Full scoring** – Supports all bid types: Spades, Clubs, Diamonds, Hearts, No Trumps, Misère, Double Misère, Open Misère, Double Open Misère
+- **Win conditions** – Play to 500, or highest score after a chosen number of hands (default 4)
+- **Dealer tracking** – Name the players, pick who deals first; in partnership games deal rotates clockwise (usually the other team). Two-handed is 1 vs 1 with two names.
 - **Round history** – Track each round with bid details and points
 - **Game results** – See who won when a team reaches 500 points
 

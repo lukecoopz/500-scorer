@@ -7,6 +7,9 @@ import {
   getBidValue,
   computeTeamRoundResult,
   computeIndividualRoundResult,
+  getCurrentDealer,
+  determineWinner,
+  updateGroupDisplay,
 } from './game-storage'
 
 const GameContext = createContext(null)
@@ -14,14 +17,14 @@ const GameContext = createContext(null)
 export function GameProvider({ children }) {
   const [currentGame, setCurrentGame] = useState(null)
 
-  const startNewTeamGame = useCallback((teamNames) => {
-    const game = createTeamGame(teamNames)
+  const startNewTeamGame = useCallback((teamNames, options) => {
+    const game = createTeamGame(teamNames, options)
     setCurrentGame(game)
     return game
   }, [])
 
-  const startNewIndividualGame = useCallback((playerNames) => {
-    const game = createIndividualGame(playerNames)
+  const startNewIndividualGame = useCallback((playerNames, options) => {
+    const game = createIndividualGame(playerNames, options)
     setCurrentGame(game)
     return game
   }, [])
@@ -39,6 +42,21 @@ export function GameProvider({ children }) {
     setCurrentGame(updated)
   }, [currentGame])
 
+  const renameSides = useCallback((names, members) => {
+    if (!currentGame) return
+    const trimmed = names.map((n, i) => n.trim() || (currentGame.mode === 'individual' ? `Player ${i + 1}` : `Team ${i + 1}`))
+    const updates = currentGame.mode === 'individual'
+      ? { players: trimmed }
+      : { teams: trimmed, ...(members ? { members } : {}) }
+    const updated = { ...currentGame, ...updates }
+    saveGame(updated)
+    setCurrentGame(updated)
+    updateGroupDisplay(currentGame.teamKey, {
+      names: trimmed,
+      members: currentGame.mode === 'individual' ? undefined : (members || currentGame.members),
+    })
+  }, [currentGame])
+
   const setBid = useCallback((callerIndex, suit, tricks) => {
     if (!currentGame) return
     const bidValue = getBidValue(suit, tricks)
@@ -54,6 +72,7 @@ export function GameProvider({ children }) {
       : computeTeamRoundResult(currentGame, callerIndex, suit, bidTricks, callerTricksWon)
 
     const newScores = currentGame.scores.map((s, i) => s + pts[i])
+    const dealer = getCurrentDealer(currentGame)
     const rounds = [
       ...currentGame.rounds,
       {
@@ -62,10 +81,15 @@ export function GameProvider({ children }) {
         callerTricksWon,
         bidMade,
         pts,
+        dealerName: dealer?.name,
       },
     ]
-    const winnerIndex = newScores.findIndex((s) => s >= 500)
-    const winner = winnerIndex === -1 ? null : winnerIndex
+    const winner = determineWinner(
+      newScores,
+      currentGame.winMode,
+      rounds.length,
+      currentGame.targetHands
+    )
     updateGame({
       scores: newScores,
       rounds,
@@ -80,8 +104,12 @@ export function GameProvider({ children }) {
     const round = currentGame.rounds[roundIndex]
     const newRounds = currentGame.rounds.filter((_, i) => i !== roundIndex)
     const newScores = currentGame.scores.map((s, i) => s - (round.pts?.[i] || 0))
-    const winnerIndex = newScores.findIndex((s) => s >= 500)
-    const winner = winnerIndex === -1 ? null : winnerIndex
+    const winner = determineWinner(
+      newScores,
+      currentGame.winMode,
+      newRounds.length,
+      currentGame.targetHands
+    )
     updateGame({
       scores: newScores,
       rounds: newRounds,
@@ -98,6 +126,7 @@ export function GameProvider({ children }) {
         startNewIndividualGame,
         loadGame,
         updateGame,
+        renameSides,
         setBid,
         confirmRound,
         deleteRound,
