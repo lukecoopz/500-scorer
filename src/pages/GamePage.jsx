@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as Slider from '@radix-ui/react-slider'
-import { Trophy, ArrowLeft, Trash2, Check, Spade, Club, Diamond, Heart } from 'lucide-react'
+import { Trophy, ArrowLeft, Trash2, Check, Spade, Club, Diamond, Heart, Pencil } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
-import { getBidValue, computeTeamRoundResult, computeIndividualRoundResult, TRICK_OPTIONS } from '@/lib/game-storage'
+import { getBidValue, computeTeamRoundResult, computeIndividualRoundResult, TRICK_OPTIONS, isMisereSuit, isSoloMisereSuit, getCurrentDealer, getDealerNameForRound, DEFAULT_TARGET_HANDS } from '@/lib/game-storage'
 import { RoundBidDisplay } from '@/lib/suit-icons'
 import GameResultsModal from '@/components/GameResultsModal'
 import { Button } from '@/components/ui/button'
@@ -25,17 +25,28 @@ const suitIcons = {
   Hearts: <Heart className="w-5 h-5 text-app-pink" />,
   NT: <span className="inline-flex items-center justify-center w-5 h-5 text-app-gold font-medium">NT</span>,
   M: <span className="inline-flex items-center justify-center w-5 h-5 text-app-purple font-medium">M</span>,
+  DM: <span className="inline-flex items-center justify-center w-5 h-5 text-app-purple font-medium text-[10px]">DM</span>,
   OM: <span className="inline-flex items-center justify-center w-5 h-5 text-app-purple font-medium">OM</span>,
+  DOM: <span className="inline-flex items-center justify-center w-5 h-5 text-app-purple font-medium text-[10px]">DOM</span>,
 }
 
 const CALL_SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts', 'NT']
 const ACE_SUITS = ['Spades', 'Clubs', 'Diamonds', 'Hearts']
 
+function DealerMark() {
+  return (
+    <span className="text-[10px] font-semibold text-app-gold border border-app-gold/40 rounded px-1 shrink-0">D</span>
+  )
+}
+
 export default function GamePage() {
   const { gameId } = useParams()
   const navigate = useNavigate()
-  const { currentGame, loadGame, updateGame, setBid, confirmRound, deleteRound } = useGame()
+  const { currentGame, loadGame, updateGame, setBid, confirmRound, deleteRound, renameSides } = useGame()
   const [roundToDelete, setRoundToDelete] = useState(null)
+  const [editingNames, setEditingNames] = useState(false)
+  const [draftNames, setDraftNames] = useState([])
+  const [draftMembers, setDraftMembers] = useState([])
 
   const [caller, setCaller] = useState(null)
   const [suit, setSuit] = useState(null)
@@ -56,7 +67,7 @@ export default function GamePage() {
     const hasRound = !!currentGame?.currentRound
     if (hasRound && !hadRoundRef.current) {
       const r = currentGame.currentRound
-      const misere = r.suit === 'M' || r.suit === 'OM'
+      const misere = isMisereSuit(r.suit)
       setTricksWon(misere ? 0 : r.tricks)
     }
     hadRoundRef.current = hasRound
@@ -81,13 +92,14 @@ export default function GamePage() {
   const isRecordingTricks = !!round
 
   const isBidExpanded = caller != null
-  const isMisere = suit === 'M' || suit === 'OM'
+  const isMisere = isMisereSuit(suit)
   const bidValue = suit ? getBidValue(suit, tricks) : 0
   const isBidComplete = caller != null && suit != null && (isMisere || tricks != null)
   const selectedValue = isBidComplete ? bidValue : null
 
-  const isMisereRound = round && (round.suit === 'M' || round.suit === 'OM')
-  const needsPartner = isIndividual && !isMisereRound
+  const isMisereRound = round && isMisereSuit(round.suit)
+  const isSoloMisereRound = round && isSoloMisereSuit(round.suit)
+  const needsPartner = isIndividual && !isSoloMisereRound
   const canPreviewRound = round && tricksWon != null && (!needsPartner || partner != null)
   const roundResult = canPreviewRound
     ? (isIndividual
@@ -95,11 +107,16 @@ export default function GamePage() {
         : computeTeamRoundResult(currentGame, round.callerIndex, round.suit, round.tricks, tricksWon))
     : null
 
+  const isHandsGame = currentGame.winMode === 'hands'
+  const targetHands = currentGame.targetHands || DEFAULT_TARGET_HANDS
+  const dealer = getCurrentDealer(currentGame)
+  const dealerTeamIndex = dealer?.teamIndex
+
   // Notify when the calling side's bid, if made, would reach 500 and win the game.
   const callerScore = caller != null ? scores[caller] : 0
-  const isWinningCall = isBidExpanded && bidValue > 0 && callerScore + bidValue >= 500
+  const isWinningCall = !isHandsGame && isBidExpanded && bidValue > 0 && callerScore + bidValue >= 500
   const roundCallerScore = round ? scores[round.callerIndex] : 0
-  const isWinningRound = isRecordingTricks && round.bidValue > 0 && roundCallerScore + round.bidValue >= 500
+  const isWinningRound = !isHandsGame && isRecordingTricks && round.bidValue > 0 && roundCallerScore + round.bidValue >= 500
 
   // Only once tricks are being recorded (bid confirmed via Next) do we collapse to one card.
   // Before that, all teams/players stay visible so the caller can still be changed.
@@ -114,6 +131,27 @@ export default function GamePage() {
     } else {
       setCaller(idx)
     }
+  }
+
+  const openEditNames = () => {
+    setDraftNames([...names])
+    setDraftMembers((currentGame.members || []).map((row) => [...row]))
+    setEditingNames(true)
+  }
+
+  const handleSaveNames = () => {
+    if (isIndividual) {
+      renameSides(draftNames)
+    } else if (currentGame.twoHanded) {
+      const trimmed = draftNames.map((n, i) => n.trim() || names[i])
+      renameSides(trimmed, trimmed.map((n) => [n]))
+    } else {
+      const cleanedMembers = draftMembers.map((row, t) =>
+        row.map((n, p) => n.trim() || currentGame.members?.[t]?.[p] || `${draftNames[t] || names[t]} ${p + 1}`)
+      )
+      renameSides(draftNames, cleanedMembers)
+    }
+    setEditingNames(false)
   }
 
   const renderCallerCard = (idx) => {
@@ -155,7 +193,7 @@ export default function GamePage() {
     if (!round) return
     setCaller(round.callerIndex)
     setSuit(round.suit)
-    setTricks(round.suit === 'M' || round.suit === 'OM' ? null : round.tricks)
+    setTricks(isMisereSuit(round.suit) ? null : round.tricks)
     setPartner(null)
     setCalledAceSuit(null)
     updateGame({ currentRound: null })
@@ -203,7 +241,7 @@ export default function GamePage() {
       <div className="flex flex-col h-[calc(100vh-5.5rem)] min-h-0">
         {/* Fixed top: back button, score cards, Who's Calling */}
         <div className="flex-none space-y-2">
-          <div className="mb-1">
+          <div className="mb-1 flex items-center justify-between">
             <Button
               variant="ghost"
               size="icon"
@@ -211,6 +249,9 @@ export default function GamePage() {
               aria-label="Back to games list"
             >
               <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={openEditNames} aria-label="Edit names">
+              <Pencil className="w-4 h-4" />
             </Button>
           </div>
 
@@ -228,9 +269,21 @@ export default function GamePage() {
                   }`}
                 >
                   <div className="flex justify-center items-center gap-1.5">
+                    {(isIndividual || currentGame.twoHanded) && i === dealerTeamIndex && <DealerMark />}
                     <span className="text-xs text-white/70 uppercase truncate">{name}</span>
                     {i === leaderIndex && <Trophy className="w-4 h-4 text-app-gold shrink-0" />}
                   </div>
+                  {!isIndividual && !currentGame.twoHanded && currentGame.members?.[i]?.length > 1 && (
+                    <p className="text-[10px] text-white/45 truncate flex items-center justify-center gap-x-1 flex-wrap">
+                      {currentGame.members[i].map((memberName, p) => (
+                        <span key={p} className="inline-flex items-center gap-0.5">
+                          {p > 0 && <span className="text-white/30">·</span>}
+                          {dealer?.teamIndex === i && dealer.memberIndex === p && <DealerMark />}
+                          {memberName}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   <p className="text-2xl font-bold mt-0.5">{score}</p>
                   <p className={`text-[11px] leading-tight mt-0.5 min-h-[2.1em] flex flex-wrap items-center justify-center ${
                     delta != null
@@ -254,6 +307,23 @@ export default function GamePage() {
             })}
           </div>
 
+          {(dealer || isHandsGame) && (
+            <p className="text-xs text-white/60 text-center">
+              {dealer && (
+                <>
+                  Dealer: <span className="text-white font-medium">{dealer.name}</span>
+                  {dealer.nextName && <> · next {dealer.nextName}</>}
+                </>
+              )}
+              {dealer && isHandsGame && ' · '}
+              {isHandsGame && (
+                (currentGame.rounds?.length || 0) < targetHands
+                  ? <>Highest after {targetHands} · hand {(currentGame.rounds?.length || 0) + 1}</>
+                  : <>Tiebreak · Hand {(currentGame.rounds?.length || 0) + 1}</>
+              )}
+            </p>
+          )}
+
         {!currentGame.winner && (
           <div>
             <h3 className="text-app-label text-xs font-medium mb-1">WHO'S CALLING?</h3>
@@ -266,7 +336,9 @@ export default function GamePage() {
               <div className="mt-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-app-label text-xs font-medium">
-                    {isMisereRound ? 'TRICKS WON BY CALLER (0 = bid made)' : isIndividual ? "TRICKS WON BY CALLER'S SIDE" : 'TRICKS WON BY CALLER'}
+                    {isMisereRound
+                      ? (isSoloMisereRound ? 'TRICKS WON BY CALLER (0 = bid made)' : "TRICKS WON BY CALLING SIDE (0 = bid made)")
+                      : isIndividual ? "TRICKS WON BY CALLER'S SIDE" : 'TRICKS WON BY CALLER'}
                   </h4>
                   <button
                     type="button"
@@ -413,7 +485,12 @@ export default function GamePage() {
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-1 mt-1">
-                      {['M', 'OM'].map((s) => {
+                      {[
+                        { s: 'M', label: 'Misère' },
+                        { s: 'DM', label: 'Double Misère' },
+                        { s: 'OM', label: 'Open Misère' },
+                        { s: 'DOM', label: 'Double Open Misère' },
+                      ].map(({ s, label }) => {
                         const cellValue = getBidValue(s)
                         const isSelected = suit === s
                         const isLower = selectedValue != null && cellValue < selectedValue
@@ -428,7 +505,7 @@ export default function GamePage() {
                                 : 'glass border-white/10 hover:bg-white/5'
                             } ${isLower ? 'opacity-30 grayscale' : ''}`}
                           >
-                            <span className="text-xs font-medium">{s === 'M' ? 'Misère' : 'Open Misère'}</span>
+                            <span className="text-xs font-medium">{label}</span>
                             <span className="text-[11px] text-white/50">{cellValue}</span>
                           </button>
                         )
@@ -470,6 +547,7 @@ export default function GamePage() {
                   const totals = runningTotals[i] || names.map(() => 0)
                   const callerName = names[r.callerIndex]
                   const partnerName = isIndividual && r.partnerIndex != null ? names[r.partnerIndex] : null
+                  const dealerName = getDealerNameForRound(currentGame, i)
                   return (
                     <li
                       key={i}
@@ -484,6 +562,9 @@ export default function GamePage() {
                         <span className="text-xs text-white/60 mt-0.5 block">
                           {names.map((n, ni) => `${n}: ${totals[ni]}`).join(' · ')}
                         </span>
+                        {dealerName && (
+                          <span className="text-xs text-white/50 mt-0.5 block">Dealer: {dealerName}</span>
+                        )}
                       </div>
                       <span className="flex gap-2 text-sm shrink-0 flex-wrap justify-end max-w-[30%]">
                         {names.map((n, ni) => {
@@ -515,6 +596,66 @@ export default function GamePage() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={editingNames} onOpenChange={(open) => !open && setEditingNames(false)}>
+        <AlertDialogContent className="glass-strong border-white/10 text-white bg-[#1e2a3b] p-6 max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit names</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/70">
+              {isIndividual ? 'Change player names for this game.' : 'Change team and player names for this game.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 py-2">
+            {draftNames.map((name, i) => (
+              <div key={i} className="space-y-2">
+                <label className="text-xs font-medium text-app-label block">
+                  {isIndividual || currentGame.twoHanded ? `PLAYER ${i + 1}` : `TEAM ${i + 1}`}
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setDraftNames((prev) => prev.map((n, idx) => (idx === i ? e.target.value : n)))}
+                  className="w-full px-3 py-2 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label"
+                />
+                {!isIndividual && !currentGame.twoHanded && draftMembers[i] && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {draftMembers[i].map((playerName, p) => (
+                      <input
+                        key={p}
+                        type="text"
+                        placeholder={`Player ${p + 1}`}
+                        value={playerName}
+                        onChange={(e) =>
+                          setDraftMembers((prev) =>
+                            prev.map((row, t) =>
+                              t === i ? row.map((n, pi) => (pi === p ? e.target.value : n)) : row
+                            )
+                          )
+                        }
+                        className="w-full px-3 py-2 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label text-sm"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setEditingNames(false)}
+              className="border border-white/20 bg-transparent text-white hover:bg-white/10 px-4 py-2 rounded-md"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSaveNames}
+              className="bg-app-green hover:bg-app-green/90 text-white px-4 py-2 rounded-md"
+            >
+              Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {currentGame.winner != null && (
         <GameResultsModal

@@ -11,7 +11,11 @@ import {
   MIN_INDIVIDUAL_PLAYERS,
   MAX_INDIVIDUAL_PLAYERS,
   DEFAULT_INDIVIDUAL_PLAYERS,
+  DEFAULT_TARGET_HANDS,
+  PLAYERS_PER_TEAM,
+  dealerSeatsFromMembers,
 } from '@/lib/game-storage'
+import GameSetupOptions from '@/components/GameSetupOptions'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -23,12 +27,20 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 
+function emptyMembers(teamCount) {
+  return Array.from({ length: teamCount }, () => Array.from({ length: PLAYERS_PER_TEAM }, () => ''))
+}
+
 export default function StartPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { startNewTeamGame, startNewIndividualGame } = useGame()
   const [gameType, setGameType] = useState(null) // 'team' | 'individual'
   const [names, setNames] = useState(['', ''])
+  const [members, setMembers] = useState(emptyMembers(2))
+  const [winMode, setWinMode] = useState('points')
+  const [targetHands, setTargetHands] = useState(DEFAULT_TARGET_HANDS)
+  const [firstDealerIndex, setFirstDealerIndex] = useState(0)
   const [groupToDelete, setGroupToDelete] = useState(null)
   const [, setRefresh] = useState(0)
 
@@ -38,6 +50,10 @@ export default function StartPage() {
   const resetForm = () => {
     setGameType(null)
     setNames(['', ''])
+    setMembers(emptyMembers(2))
+    setWinMode('points')
+    setTargetHands(DEFAULT_TARGET_HANDS)
+    setFirstDealerIndex(0)
   }
 
   const handleCancelNewGame = () => {
@@ -47,33 +63,63 @@ export default function StartPage() {
 
   const handleSelectType = (type) => {
     setGameType(type)
-    setNames(type === 'team' ? ['', ''] : Array.from({ length: DEFAULT_INDIVIDUAL_PLAYERS }, () => ''))
+    if (type === 'individual') {
+      setNames(Array.from({ length: DEFAULT_INDIVIDUAL_PLAYERS }, () => ''))
+    } else {
+      setNames(['', ''])
+    }
+    setMembers(emptyMembers(2))
+    setFirstDealerIndex(0)
   }
 
   const handleTeamCountChange = (teamCount) => {
     setNames((prev) => Array.from({ length: teamCount }, (_, i) => prev[i] || ''))
+    setMembers((prev) => emptyMembers(teamCount).map((row, i) => prev[i] || row))
+    setFirstDealerIndex((i) => (i >= teamCount * PLAYERS_PER_TEAM ? 0 : i))
   }
 
   const handleIndividualCountChange = (delta) => {
-    setNames((prev) => {
-      const nextLen = Math.min(MAX_INDIVIDUAL_PLAYERS, Math.max(MIN_INDIVIDUAL_PLAYERS, prev.length + delta))
-      return Array.from({ length: nextLen }, (_, i) => prev[i] || '')
-    })
+    const nextLen = Math.min(MAX_INDIVIDUAL_PLAYERS, Math.max(MIN_INDIVIDUAL_PLAYERS, names.length + delta))
+    setNames((prev) => Array.from({ length: nextLen }, (_, i) => prev[i] || ''))
+    setFirstDealerIndex((i) => (i >= nextLen ? 0 : i))
   }
 
   const handleNameChange = (index, value) => {
     setNames((prev) => prev.map((n, i) => (i === index ? value : n)))
   }
 
+  const handleMemberChange = (teamIndex, playerIndex, value) => {
+    setMembers((prev) =>
+      prev.map((row, t) => (t === teamIndex ? row.map((n, p) => (p === playerIndex ? value : n)) : row))
+    )
+  }
+
+  const resolvedTeamNames = names.map((n, i) => n.trim() || (gameType === 'twohanded' ? `Player ${i + 1}` : `Team ${i + 1}`))
+  const dealerSeats = gameType === 'team'
+    ? dealerSeatsFromMembers(resolvedTeamNames, members)
+    : names.map((n, i) => ({
+        name: n.trim() || `Player ${i + 1}`,
+        teamIndex: i,
+      }))
+
+  const gameOptions = () => ({
+    winMode,
+    targetHands,
+    firstDealerIndex,
+    members: gameType === 'team' ? members : gameType === 'twohanded' ? names.map((n) => [n]) : undefined,
+    twoHanded: gameType === 'twohanded',
+  })
+
   const handleStart = (e) => {
     e.preventDefault()
-    if (gameType === 'team') {
-      const teamNames = names.map((n, i) => n.trim() || `Team ${i + 1}`)
-      const game = startNewTeamGame(teamNames)
+    if (gameType === 'team' || gameType === 'twohanded') {
+      const fallback = gameType === 'twohanded' ? 'Player' : 'Team'
+      const teamNames = names.map((n, i) => n.trim() || `${fallback} ${i + 1}`)
+      const game = startNewTeamGame(teamNames, gameOptions())
       navigate(`/game/${game.id}`)
     } else {
       const playerNames = names.map((n, i) => n.trim() || `Player ${i + 1}`)
-      const game = startNewIndividualGame(playerNames)
+      const game = startNewIndividualGame(playerNames, gameOptions())
       navigate(`/game/${game.id}`)
     }
   }
@@ -117,7 +163,20 @@ export default function StartPage() {
               </div>
               <div>
                 <p className="text-lg font-bold text-white">Team Game</p>
-                <p className="text-sm text-white/70">2 or 3 teams, solo or in pairs</p>
+                <p className="text-sm text-white/70">2 or 3 teams of two, named players</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectType('twohanded')}
+              className="w-full flex items-center gap-4 p-5 rounded-xl glass border border-white/10 hover:bg-white/10 transition-colors text-left"
+            >
+              <div className="w-12 h-12 rounded-lg glass flex items-center justify-center shrink-0">
+                <User className="w-6 h-6 text-white/70" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-white">Two Handed</p>
+                <p className="text-sm text-white/70">1 vs 1 — just two names</p>
               </div>
             </button>
             <button
@@ -209,26 +268,54 @@ export default function StartPage() {
           )}
 
           {names.map((name, i) => (
-            <div key={i}>
-              <label className="text-sm font-medium text-app-label block mb-2">
-                {labelPrefix} {i + 1}
-              </label>
-              <div className="relative">
-                {gameType === 'team' ? (
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
-                ) : (
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
-                )}
-                <input
-                  type="text"
-                  placeholder={gameType === 'team' ? 'Enter team name...' : 'Enter player name...'}
-                  value={name}
-                  onChange={(e) => handleNameChange(i, e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label"
-                />
+            <div key={i} className="space-y-3">
+              <div>
+                <label className="text-sm font-medium text-app-label block mb-2">
+                  {labelPrefix} {i + 1}
+                </label>
+                <div className="relative">
+                  {gameType === 'team' ? (
+                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+                  ) : (
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+                  )}
+                  <input
+                    type="text"
+                    placeholder={gameType === 'team' ? 'Enter team name...' : 'Enter player name...'}
+                    value={name}
+                    onChange={(e) => handleNameChange(i, e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label"
+                  />
+                </div>
               </div>
+              {gameType === 'team' && members[i] && (
+                <div className="grid grid-cols-2 gap-2">
+                  {members[i].map((playerName, p) => (
+                    <div key={p}>
+                      <label className="text-xs font-medium text-white/50 block mb-1">PLAYER {p + 1}</label>
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        value={playerName}
+                        onChange={(e) => handleMemberChange(i, p, e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
+
+          <GameSetupOptions
+            dealerSeats={dealerSeats}
+            winMode={winMode}
+            setWinMode={setWinMode}
+            targetHands={targetHands}
+            setTargetHands={setTargetHands}
+            firstDealerIndex={firstDealerIndex}
+            setFirstDealerIndex={setFirstDealerIndex}
+          />
 
           <Button
             type="submit"

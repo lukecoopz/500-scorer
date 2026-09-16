@@ -50,7 +50,7 @@ export default function RulesModal({ open, onOpenChange }) {
             >
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">OBJECTIVE</h3>
-                <p>Played with 2 or 3 fixed teams (solo or in pairs) for the whole game. First team to reach 500 points wins. Each round, one team calls (bids) a suit and number of tricks; the other team(s) defend.</p>
+                <p>Played with 2 or 3 fixed teams of two, or two-handed (1 vs 1). First team to reach 500 points wins. Each round, one side calls (bids) a suit and number of tricks; the other side defends.</p>
               </section>
 
               <section>
@@ -87,21 +87,23 @@ export default function RulesModal({ open, onOpenChange }) {
 
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">MISÈRE</h3>
-                <p><span className="text-app-purple font-medium">Misère</span> (250 pts): caller bids to lose every trick.<br />
-                <span className="text-app-purple font-medium">Open Misère</span> (500 pts): same, but the caller's hand is played face-up on the table.</p>
-                <p className="mt-1.5">Misère is played solo, even in a team game &mdash; the caller&apos;s partner puts their hand down and sits out the hand entirely.</p>
+                <p><span className="text-app-purple font-medium">Misère</span> (250 pts): caller bids to lose every trick, and plays alone &mdash; their partner sits out.<br />
+                <span className="text-app-purple font-medium">Open Misère</span> (500 pts): same solo bid, but the caller&apos;s hand is played face-up.<br />
+                <span className="text-app-purple font-medium">Double Misère</span> (350 pts): played with partner like a normal bid. The calling team must not take a single trick.<br />
+                <span className="text-app-purple font-medium">Double Open Misère</span> (1000 pts): same partnership bid, with the caller&apos;s hand face-up. The team must still take zero tricks.</p>
+                <p className="mt-1.5">Plain misère and open misère are solo, even in a team game. Double misère and double open misère keep both partners in the hand.</p>
               </section>
 
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">SCORING A ROUND</h3>
                 <p>If the caller makes their bid (or misère), they score the bid value. If they fail, they lose the bid value instead.</p>
                 <p className="mt-1.5">Each other team scores 10 points per trick they win, whether or not the caller's bid succeeds (with 3 teams, the two non-calling teams are scored independently of each other). Defenders can&apos;t win the game by defending &mdash; their points are capped just short of 500, so only a successful call can finish the game.</p>
-                <p className="mt-1.5">Misère reverses this: since the caller is trying to win zero tricks, each other team instead scores 10 points for every trick the misère caller ends up winning.</p>
+                <p className="mt-1.5">Misère reverses this: since the calling side is trying to win zero tricks, each other team instead scores 10 points for every trick that side ends up winning.</p>
               </section>
 
               <section>
                 <h3 className="text-app-label text-xs font-medium mb-1.5">WINNING</h3>
-                <p>The first team to reach 500 points wins immediately.</p>
+                <p>By default, the first team to reach 500 points wins immediately. You can also play best of a set number of hands (4 by default): after that many hands, whoever has the higher score wins. If it&apos;s a tie, keep playing until someone is ahead.</p>
               </section>
 
               <section>
@@ -131,9 +133,10 @@ export default function RulesModal({ open, onOpenChange }) {
               </section>
 
               <section>
-                <h3 className="text-app-label text-xs font-medium mb-1.5">MISÈRE IS SOLO</h3>
+                <h3 className="text-app-label text-xs font-medium mb-1.5">MISÈRE</h3>
                 <p>Misère and Open Misère are played alone &mdash; no partner is called, it&apos;s the caller against everyone else. The caller scores (or loses) the bid value by themselves.</p>
-                <p className="mt-1.5">Defending is reversed here too: since the caller is trying to win zero tricks, everyone else scores 10 points for every trick the misère caller ends up winning, split equally the same way as normal defending.</p>
+                <p className="mt-1.5">Double Misère and Double Open Misère are partnership bids: the caller still calls an ace, and the pair must not take a single trick. Both score (or lose) the bid value together, like a suit bid.</p>
+                <p className="mt-1.5">Defending is reversed for all misère: everyone else scores 10 points for every trick the calling side ends up winning.</p>
               </section>
             </Tabs.Content>
           </Tabs.Root>
