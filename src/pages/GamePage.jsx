@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import * as Slider from '@radix-ui/react-slider'
-import { Trophy, ArrowLeft, Trash2, Check, Spade, Club, Diamond, Heart, Pencil } from 'lucide-react'
+import { Trophy, ArrowLeft, Trash2, Check, Spade, Club, Diamond, Heart, Pencil, ArrowLeftRight } from 'lucide-react'
 import { useGame } from '@/lib/game-context'
-import { getBidValue, computeTeamRoundResult, computeIndividualRoundResult, TRICK_OPTIONS, isMisereSuit, isSoloMisereSuit, getCurrentDealer, getDealerNameForRound, DEFAULT_TARGET_HANDS } from '@/lib/game-storage'
+import { getBidValue, computeTeamRoundResult, computeIndividualRoundResult, TRICK_OPTIONS, isMisereSuit, isSoloMisereSuit, getCurrentDealer, getDealerNameForRound, DEFAULT_TARGET_HANDS, canConvertToTwoHanded, canConvertToTeams, getTeamConversionDefaults } from '@/lib/game-storage'
 import { RoundBidDisplay } from '@/lib/suit-icons'
 import GameResultsModal from '@/components/GameResultsModal'
 import { Button } from '@/components/ui/button'
@@ -42,11 +42,14 @@ function DealerMark() {
 export default function GamePage() {
   const { gameId } = useParams()
   const navigate = useNavigate()
-  const { currentGame, loadGame, updateGame, setBid, confirmRound, deleteRound, renameSides } = useGame()
+  const { currentGame, loadGame, updateGame, setBid, confirmRound, deleteRound, renameSides, convertMode } = useGame()
   const [roundToDelete, setRoundToDelete] = useState(null)
   const [editingNames, setEditingNames] = useState(false)
   const [draftNames, setDraftNames] = useState([])
   const [draftMembers, setDraftMembers] = useState([])
+  const [convertTarget, setConvertTarget] = useState(null) // 'twoHanded' | 'teams'
+  const [convertNames, setConvertNames] = useState([])
+  const [convertMembers, setConvertMembers] = useState([])
 
   const [caller, setCaller] = useState(null)
   const [suit, setSuit] = useState(null)
@@ -138,6 +141,33 @@ export default function GamePage() {
     setDraftMembers((currentGame.members || []).map((row) => [...row]))
     setEditingNames(true)
   }
+
+  const openConvertMode = () => {
+    if (canConvertToTwoHanded(currentGame)) {
+      setConvertNames([...currentGame.teams])
+      setConvertMembers([])
+      setConvertTarget('twoHanded')
+    } else if (canConvertToTeams(currentGame)) {
+      const defaults = getTeamConversionDefaults(currentGame)
+      setConvertNames(defaults.teams)
+      setConvertMembers(defaults.members)
+      setConvertTarget('teams')
+    }
+  }
+
+  const handleConfirmConvert = () => {
+    if (convertTarget === 'twoHanded') {
+      convertMode('twoHanded', { names: convertNames })
+    } else if (convertTarget === 'teams') {
+      convertMode('teams', { teams: convertNames, members: convertMembers })
+    }
+    setCaller(null)
+    setSuit(null)
+    setTricks(null)
+    setConvertTarget(null)
+  }
+
+  const canConvert = canConvertToTwoHanded(currentGame) || canConvertToTeams(currentGame)
 
   const handleSaveNames = () => {
     if (isIndividual) {
@@ -250,9 +280,16 @@ export default function GamePage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={openEditNames} aria-label="Edit names">
-              <Pencil className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center">
+              {canConvert && (
+                <Button variant="ghost" size="icon" onClick={openConvertMode} aria-label="Change game mode">
+                  <ArrowLeftRight className="w-4 h-4" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" onClick={openEditNames} aria-label="Edit names">
+                <Pencil className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Score cards */}
@@ -652,6 +689,74 @@ export default function GamePage() {
               className="bg-app-green hover:bg-app-green/90 text-white px-4 py-2 rounded-md"
             >
               Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={convertTarget !== null} onOpenChange={(open) => !open && setConvertTarget(null)}>
+        <AlertDialogContent className="glass-strong border-white/10 text-white bg-[#1e2a3b] p-6 max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {convertTarget === 'twoHanded' ? 'Switch to a 2 player game?' : 'Switch to a team game?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-white/70">
+              {convertTarget === 'twoHanded'
+                ? 'Each team becomes a single player. Nothing is deleted: all rounds, scores and history stay exactly as they are, and the team and member names are remembered so you can switch back.'
+                : 'Each player becomes a team of two. Nothing is deleted: all rounds, scores and history stay exactly as they are, and you can switch back to 2 player at any time.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-xs text-white/60">
+              Keeps {rounds.length} {rounds.length === 1 ? 'round' : 'rounds'} · current score{' '}
+              {names.map((n, i) => `${n} ${scores[i]}`).join(' - ')}
+            </p>
+            {convertNames.map((name, i) => (
+              <div key={i} className="space-y-2">
+                <label className="text-xs font-medium text-app-label block">
+                  {convertTarget === 'twoHanded' ? `PLAYER ${i + 1}` : `TEAM ${i + 1}`}
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setConvertNames((prev) => prev.map((n, idx) => (idx === i ? e.target.value : n)))}
+                  className="w-full px-3 py-2 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label"
+                />
+                {convertTarget === 'teams' && convertMembers[i] && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {convertMembers[i].map((playerName, p) => (
+                      <input
+                        key={p}
+                        type="text"
+                        placeholder={`Player ${p + 1}`}
+                        value={playerName}
+                        onChange={(e) =>
+                          setConvertMembers((prev) =>
+                            prev.map((row, t) =>
+                              t === i ? row.map((n, pi) => (pi === p ? e.target.value : n)) : row
+                            )
+                          )
+                        }
+                        className="w-full px-3 py-2 rounded-lg glass text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-app-label text-sm"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => setConvertTarget(null)}
+              className="border border-white/20 bg-transparent text-white hover:bg-white/10 px-4 py-2 rounded-md"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmConvert}
+              className="bg-app-green hover:bg-app-green/90 text-white px-4 py-2 rounded-md"
+            >
+              Switch mode
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

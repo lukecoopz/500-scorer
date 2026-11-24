@@ -274,7 +274,10 @@ export function renameGroupAndGames(teamKey, { names, members }) {
   const next = all.map((g) => {
     if (g.teamKey !== teamKey) return g
     if (g.mode === 'individual') return { ...g, players: trimmed }
-    return { ...g, teams: trimmed, ...(members ? { members } : {}) }
+    // A group can hold games converted between team and two-handed, so each game keeps its own member shape.
+    if (isTwoHanded(g)) return { ...g, teams: trimmed, members: trimmed.map((n) => [n]) }
+    const fitsTeams = members?.length === g.teams?.length && members.every((row) => (row?.length || 0) > 1)
+    return { ...g, teams: trimmed, ...(fitsTeams ? { members } : {}) }
   })
   localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(next))
 }
@@ -325,6 +328,106 @@ export function deleteGame(gameId) {
   const all = raw ? JSON.parse(raw) : []
   const remaining = all.filter((g) => g.id !== gameId)
   localStorage.setItem(STORAGE_KEYS.GAMES, JSON.stringify(remaining))
+}
+
+/** Two-sided team games (2 teams of 2) can become two-handed (1 v 1). Three-team and individual games cannot. */
+export function canConvertToTwoHanded(game) {
+  return game?.mode === 'team' && !isTwoHanded(game) && game.scores?.length === 2 && game.teams?.length === 2
+}
+
+export function canConvertToTeams(game) {
+  return game?.mode === 'team' && isTwoHanded(game) && game.scores?.length === 2 && game.teams?.length === 2
+}
+
+function lastModeSnapshot(game, from) {
+  const history = Array.isArray(game?.modeHistory) ? game.modeHistory : []
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]?.from === from) return history[i]
+  }
+  return null
+}
+
+const MAX_MODE_HISTORY = 10
+
+/** Appends a snapshot, keeping only the most recent entries (entries alternate kind, so the latest of each is always kept). */
+function appendModeHistory(game, snapshot) {
+  const history = Array.isArray(game.modeHistory) ? game.modeHistory : []
+  return [...history, snapshot].slice(-MAX_MODE_HISTORY)
+}
+
+/**
+ * Prefill values for the "convert to teams" form. Team names follow the game's current player names, so
+ * renames made while in 2 player mode are kept. Member names come from the pre-conversion snapshot when
+ * there is one, else default to "<team> 1" / "<team> 2".
+ */
+export function getTeamConversionDefaults(game) {
+  const snap = lastModeSnapshot(game, 'teams')
+  const teams = [...game.teams]
+  const members = teams.map((team, t) =>
+    Array.from({ length: PLAYERS_PER_TEAM }, (_, p) => snap?.members?.[t]?.[p] || `${team} ${p + 1}`)
+  )
+  return { teams, members }
+}
+
+/**
+ * Returns a two-handed copy of a 2-team game. Each team becomes one player (the name defaults to the
+ * team name). Rounds, scores, winner and dates are carried over untouched: both modes index sides by
+ * position, so round `pts`/`callerIndex` already line up. The previous teams/members are kept in
+ * `modeHistory` so nothing is lost and the conversion can be reversed.
+ */
+export function convertGameToTwoHanded(game, playerNames = []) {
+  if (!canConvertToTwoHanded(game)) throw new Error('Only a game with two teams can become a two-player game')
+  const names = game.teams.map((team, i) => playerNames[i]?.trim() || team)
+  const snapshot = {
+    at: Date.now(),
+    from: 'teams',
+    to: 'twoHanded',
+    teams: [...game.teams],
+    members: game.members ? game.members.map((row) => [...row]) : null,
+    firstDealerIndex: game.firstDealerIndex ?? null,
+  }
+  const converted = {
+    ...game,
+    twoHanded: true,
+    teams: names,
+    members: names.map((n) => [n]),
+    modeHistory: appendModeHistory(game, snapshot),
+  }
+  // Team seating is T1a, T2a, T1b, T2b, so a seat's side is seat % 2.
+  if (game.firstDealerIndex != null) converted.firstDealerIndex = game.firstDealerIndex % 2
+  return converted
+}
+
+/** Returns a team-mode copy of a two-handed game; each player becomes a team of two. */
+export function convertGameToTeams(game, { teams = [], members = [] } = {}) {
+  if (!canConvertToTeams(game)) throw new Error('Only a two-player game can become a team game')
+  const defaults = getTeamConversionDefaults(game)
+  const names = defaults.teams.map((fallback, i) => teams[i]?.trim() || fallback)
+  const rows = names.map((team, t) =>
+    Array.from({ length: PLAYERS_PER_TEAM }, (_, p) => members[t]?.[p]?.trim() || defaults.members[t][p] || `${team} ${p + 1}`)
+  )
+  const snapshot = {
+    at: Date.now(),
+    from: 'twoHanded',
+    to: 'teams',
+    teams: [...game.teams],
+    members: game.members ? game.members.map((row) => [...row]) : null,
+    firstDealerIndex: game.firstDealerIndex ?? null,
+  }
+  const converted = {
+    ...game,
+    twoHanded: false,
+    teams: names,
+    members: rows,
+    modeHistory: appendModeHistory(game, snapshot),
+  }
+  const previous = lastModeSnapshot(game, 'teams')
+  if (game.firstDealerIndex != null) {
+    const original = previous?.firstDealerIndex
+    converted.firstDealerIndex =
+      original != null && original % 2 === game.firstDealerIndex % 2 ? original : game.firstDealerIndex
+  }
+  return converted
 }
 
 /** Team game: 2, 4, or 6 players as fixed partners (teamNames.length teams of 2, or 2 solo teams). */

@@ -10,6 +10,10 @@ import {
   getCurrentDealer,
   determineWinner,
   updateGroupDisplay,
+  getTeams,
+  isTwoHanded,
+  convertGameToTwoHanded,
+  convertGameToTeams,
 } from './game-storage'
 
 const GameContext = createContext(null)
@@ -51,10 +55,22 @@ export function GameProvider({ children }) {
     const updated = { ...currentGame, ...updates }
     saveGame(updated)
     setCurrentGame(updated)
+    const group = getTeams().find((t) => t.key === currentGame.teamKey)
+    const shapeMatchesGroup = !group || isTwoHanded(group) === isTwoHanded(updated)
     updateGroupDisplay(currentGame.teamKey, {
       names: trimmed,
-      members: currentGame.mode === 'individual' ? undefined : (members || currentGame.members),
+      members: currentGame.mode === 'individual' || !shapeMatchesGroup ? undefined : (members || currentGame.members),
     })
+  }, [currentGame])
+
+  const convertMode = useCallback((target, options) => {
+    if (!currentGame) return null
+    const converted = target === 'twoHanded'
+      ? convertGameToTwoHanded(currentGame, options?.names)
+      : convertGameToTeams(currentGame, options)
+    saveGame(converted)
+    setCurrentGame(converted)
+    return converted
   }, [currentGame])
 
   const setBid = useCallback((callerIndex, suit, tricks) => {
@@ -127,6 +143,7 @@ export function GameProvider({ children }) {
         loadGame,
         updateGame,
         renameSides,
+        convertMode,
         setBid,
         confirmRound,
         deleteRound,
