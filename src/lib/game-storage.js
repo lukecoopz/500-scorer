@@ -347,10 +347,22 @@ function lastModeSnapshot(game, from) {
   return null
 }
 
-/** Prefill values for the "convert to teams" form: the pre-conversion teams/members if we have them, else sensible defaults. */
+const MAX_MODE_HISTORY = 10
+
+/** Appends a snapshot, keeping only the most recent entries (entries alternate kind, so the latest of each is always kept). */
+function appendModeHistory(game, snapshot) {
+  const history = Array.isArray(game.modeHistory) ? game.modeHistory : []
+  return [...history, snapshot].slice(-MAX_MODE_HISTORY)
+}
+
+/**
+ * Prefill values for the "convert to teams" form. Team names follow the game's current player names, so
+ * renames made while in 2 player mode are kept. Member names come from the pre-conversion snapshot when
+ * there is one, else default to "<team> 1" / "<team> 2".
+ */
 export function getTeamConversionDefaults(game) {
   const snap = lastModeSnapshot(game, 'teams')
-  const teams = snap?.teams?.length === 2 ? [...snap.teams] : [...game.teams]
+  const teams = [...game.teams]
   const members = teams.map((team, t) =>
     Array.from({ length: PLAYERS_PER_TEAM }, (_, p) => snap?.members?.[t]?.[p] || `${team} ${p + 1}`)
   )
@@ -379,7 +391,7 @@ export function convertGameToTwoHanded(game, playerNames = []) {
     twoHanded: true,
     teams: names,
     members: names.map((n) => [n]),
-    modeHistory: [...(Array.isArray(game.modeHistory) ? game.modeHistory : []), snapshot],
+    modeHistory: appendModeHistory(game, snapshot),
   }
   // Team seating is T1a, T2a, T1b, T2b, so a seat's side is seat % 2.
   if (game.firstDealerIndex != null) converted.firstDealerIndex = game.firstDealerIndex % 2
@@ -407,7 +419,7 @@ export function convertGameToTeams(game, { teams = [], members = [] } = {}) {
     twoHanded: false,
     teams: names,
     members: rows,
-    modeHistory: [...(Array.isArray(game.modeHistory) ? game.modeHistory : []), snapshot],
+    modeHistory: appendModeHistory(game, snapshot),
   }
   const previous = lastModeSnapshot(game, 'teams')
   if (game.firstDealerIndex != null) {

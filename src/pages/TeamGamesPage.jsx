@@ -61,6 +61,10 @@ export default function TeamGamesPage() {
     )
   }
 
+  const teamModeGames = games.filter((g) => g.mode !== 'individual')
+  const hasMixedKinds =
+    teamModeGames.some((g) => isTwoHanded(g)) && teamModeGames.some((g) => !isTwoHanded(g))
+
   const gridColsClass = group.names.length <= 2 ? 'grid-cols-2' : 'grid-cols-3'
   const twoHanded = isTwoHanded(group)
   const perTeam = twoHanded ? 1 : PLAYERS_PER_TEAM
@@ -244,6 +248,7 @@ export default function TeamGamesPage() {
                       </p>
                       <p className="text-sm text-white/70">
                         {game.rounds?.length || 0} rounds
+                        {hasMixedKinds && game.mode !== 'individual' && (isTwoHanded(game) ? ' · 2 player' : ' · Teams')}
                         {game.winMode === 'hands'
                           ? ` · Highest after ${game.targetHands || 4}`
                           : ''}

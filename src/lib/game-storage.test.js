@@ -7,6 +7,7 @@ import {
   getCurrentDealer,
   getGameById,
   getGamesForTeam,
+  getTeamConversionDefaults,
   isTwoHanded,
   renameGroupAndGames,
   saveGame,
@@ -152,7 +153,7 @@ describe('team -> 2 player', () => {
 describe('2 player -> team', () => {
   it('round-trips back to the original teams, members and dealer', () => {
     const game = teamGame({ firstDealerIndex: 3 })
-    const twoHanded = convertGameToTwoHanded(game, ['Al', 'Cy'])
+    const twoHanded = convertGameToTwoHanded(game)
     expect(canConvertToTeams(twoHanded)).toBe(true)
 
     const back = convertGameToTeams(twoHanded)
@@ -163,6 +164,43 @@ describe('2 player -> team', () => {
     expect(back.rounds).toEqual(game.rounds)
     expect(back.scores).toEqual(game.scores)
     expect(back.modeHistory).toHaveLength(2)
+  })
+
+  it('prefills team names from the current player names, so renames made in 2 player mode are kept', () => {
+    const twoHanded = convertGameToTwoHanded(teamGame())
+    const renamed = { ...twoHanded, teams: ['Alice', 'Blues'], members: [['Alice'], ['Blues']] }
+
+    const defaults = getTeamConversionDefaults(renamed)
+    expect(defaults.teams).toEqual(['Alice', 'Blues'])
+    expect(defaults.members).toEqual([['Alice', 'Bob'], ['Cara', 'Dan']])
+
+    const back = convertGameToTeams(renamed)
+    expect(back.teams).toEqual(['Alice', 'Blues'])
+    expect(back.members).toEqual([['Alice', 'Bob'], ['Cara', 'Dan']])
+    expect(back.rounds).toEqual(renamed.rounds)
+  })
+
+  it('stays editable: explicit names and members override the prefill', () => {
+    const twoHanded = convertGameToTwoHanded(teamGame())
+    const back = convertGameToTeams(twoHanded, {
+      teams: ['Rubies', ''],
+      members: [['Ann', 'Ben'], ['', 'Dee']],
+    })
+    expect(back.teams).toEqual(['Rubies', 'Blues'])
+    expect(back.members).toEqual([['Ann', 'Ben'], ['Cara', 'Dee']])
+  })
+
+  it('caps modeHistory and always keeps the latest snapshot of each kind', () => {
+    let game = teamGame()
+    for (let i = 0; i < 30; i++) {
+      game = canConvertToTwoHanded(game) ? convertGameToTwoHanded(game) : convertGameToTeams(game)
+    }
+    expect(game.modeHistory.length).toBeLessThanOrEqual(10)
+    expect(game.modeHistory.map((h) => h.from).includes('teams')).toBe(true)
+    expect(game.modeHistory.map((h) => h.from).includes('twoHanded')).toBe(true)
+    expect(game.rounds).toEqual(teamGame().rounds)
+    expect(game.scores).toEqual(teamGame().scores)
+    expect(game.members).toEqual(teamGame().members)
   })
 
   it('round-trips a legacy game that had no members', () => {
